@@ -1,5 +1,5 @@
 /* Service Worker：离线缓存。更新应用文件后请递增 VERSION。 */
-const VERSION = 'holdrep-v2';
+const VERSION = 'holdrep-v4';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest',
   'css/app.css', 'js/config.js', 'js/detectors.js', 'js/db.js', 'js/app.js',

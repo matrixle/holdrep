@@ -37,14 +37,14 @@ python3 serve.py 192.168.x.x.pem 192.168.x.x-key.pem
 - **Dead Hang**：手臂伸直、手腕高于肩、**双脚离地**、身体基本静止 → 自动计时；
   脚是否离地靠「地面校准」判断：进入训练页后先**双脚着地、双手放下站一下**（画面里需拍到脚踝或膝盖），之后脚踝比站立位置高出 `HANG_FEET_LIFT` 才算离地。顶部提示条会告诉你当前状态。相机位置变动后，重新放下手站一下即可自动更新。不需要时可把 `HANG_REQUIRE_FEET_OFF_GROUND` 设为 false。
   姿势丢失 0.7s 以上自动暂停，回到悬垂接续。
-- **引体**：手臂伸直（起始位）→ 拉起使下巴过杠 → 回到伸直 = 1 次。离开画面 2.5s / 离开起始位 9s 自动暂停，次数保留。两次间隔 >15s 自动分组。
+- **引体**：手臂基本伸直（起始位）→ 拉起到「下巴接近杠」或「手臂明显弯曲」→ 回到基本伸直 = 1 次（判定已放宽）。离开画面 2.5s / 离开起始位 9s 自动暂停，次数保留。两次间隔 >15s 自动分组。
 - 结束本轮时会自动保存到历史（结果页「保存到历史」显示为已保存）；历史里可查看明细并删除（二次确认）。
 - 报表：总览指标 + 近 7 / 30 天每日趋势。
 
 ## 调参
 改 `js/config.js` 后，把 `sw.js` 的 `VERSION` 加一（如 `holdrep-v2`）以刷新缓存。常见问题：
 - 悬垂不计时 → 降低 `HANG_ANGLE_ENTER`、`HANG_WRIST_ABOVE`，或调大 `HANG_MAX_SWING_SPEED`
-- 引体漏计 → 调小 `PULLUP_CHIN_OFFSET` 或把 `PULLUP_CHIN_MARGIN` 设为负数；回落不算 → 降低 `PULLUP_START_ANGLE`
+- 引体漏计 → 增大 `PULLUP_CHIN_MARGIN` 或增大 `PULLUP_TOP_ELBOW_ANGLE`；回落不算 → 降低 `PULLUP_START_ANGLE`
 - 手机发热/卡顿 → 增大 `DETECT_INTERVAL_MS`，或 `SHOW_SKELETON:false`
 
 更新应用文件后记得递增 `sw.js` 的 `VERSION`。

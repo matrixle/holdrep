@@ -216,9 +216,17 @@
         this.startFrames = 0;
         if (this.armed) this.status = 'pulling';
         this.outMs += dt;
-        if (this.armed && this.barY != null && a.nose) {
-          const chinY = a.nose.y + c.PULLUP_CHIN_OFFSET * a.unit;
-          if (chinY <= this.barY + c.PULLUP_CHIN_MARGIN * a.unit) {
+        if (this.armed) {
+          // 到顶（宽松）：下巴接近/过杠，或手臂明显弯曲，满足其一即可
+          let top = false;
+          if (this.barY != null && a.nose) {
+            const chinY = a.nose.y + c.PULLUP_CHIN_OFFSET * a.unit;
+            top = chinY <= this.barY + c.PULLUP_CHIN_MARGIN * a.unit;
+          }
+          if (!top && c.PULLUP_TOP_ELBOW_ANGLE && a.arms.length) {
+            top = a.arms.reduce((t, m) => t + m.angle, 0) / a.arms.length <= c.PULLUP_TOP_ELBOW_ANGLE;
+          }
+          if (top) {
             if (++this.topFrames >= c.PULLUP_TOP_FRAMES) this.topReached = true;
           } else this.topFrames = 0;
         }
