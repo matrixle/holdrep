@@ -73,6 +73,8 @@
       // 地面校准：双手放下站立时记录脚踝/膝盖的 y，之后脚比它高 = 离地
       this.ground = { ankle: [null, null], knee: [null, null], unit: null };
       this.groundState = 'nocalib'; // nocalib | unknown | onground | lifted
+      this.liftSides = null;
+      this.trace = []; this._lastTrace = -1e9; // 调试轨迹：约每 0.5s 一行 + 状态切换时
       this.lift = null;             // 当前「较低那只脚」的离地高度（unit），仅供调试显示
     }
     _learn(a) {
@@ -93,11 +95,13 @@
       let d = null;
       for (const key of ['ankle', 'knee']) {
         if ([0, 1].every(i => g[key][i] != null && a[key][i] != null)) {
-          d = Math.min(...[0, 1].map(i => (g[key][i] - a[key][i]) / g.unit)); break;
+          this.liftSides = [0, 1].map(i => (g[key][i] - a[key][i]) / g.unit);
+          d = Math.min(...this.liftSides); break;
         }
       }
       this.lift = d;
       if (d == null) {
+        this.liftSides = null;
         this.groundState = g.ankle.every(v => v == null) && g.knee.every(v => v == null) ? 'nocalib' : 'unknown';
         return false;
       }
@@ -136,7 +140,9 @@
       } else if (!a) this.speed = 0;
       this.prevSho = a ? a.shoMid : null;
 
-      const valid = !!a && this._isHang(a) && this._feetOff(a) && this.speed <= c.HANG_MAX_SWING_SPEED;
+      const hang = !!a && this._isHang(a), feet = !!a && this._feetOff(a);
+      const valid = hang && feet && this.speed <= c.HANG_MAX_SWING_SPEED;
+      const wasActive = this.active;
 
       if (!this.active) {
         if (valid) {
@@ -156,6 +162,15 @@
         this.lostMs += dt;
         if (this.lostMs >= c.HANG_EXIT_MS) this._end(); // 丢失期间不计入时长
       }
+      // 调试轨迹：t, 左脚离地, 右脚离地, 最小肘角, 最小手腕高度, 肩速, 脚离地ok, 姿势ok(valid), 计时中
+      if (a && (this.active !== wasActive || t - this._lastTrace >= 500) && this.trace.length < 2400) {
+        this._lastTrace = t;
+        const r2 = x => x == null ? null : Math.round(x * 100) / 100, ls = this.liftSides || [];
+        this.trace.push([t, r2(ls[0]), r2(ls[1]),
+          a.arms.length ? Math.round(Math.min(...a.arms.map(m => m.angle))) : null,
+          a.arms.length ? r2(Math.min(...a.arms.map(m => m.wristUp))) : null,
+          r2(this.speed), feet ? 1 : 0, valid ? 1 : 0, this.active ? 1 : 0]);
+      }
     }
 
     finish(t0) {
@@ -163,6 +178,7 @@
       const n = this.segments.length;
       const total = this.segments.reduce((s, x) => s + x.ms, 0);
       return {
+        trace: this.trace.map(r => [Math.round((r[0] - t0) / 100) / 10, ...r.slice(1)]),
         segments: this.segments.map(s => ({ offsetMs: Math.round(s.startT - t0), ms: Math.round(s.ms) })),
         totalMs: Math.round(total),
         count: n,

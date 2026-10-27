@@ -281,6 +281,14 @@
   const stat = (k, v, cls = '') => `<div class="stat ${cls}"><small>${k}</small><b>${v}</b></div>`;
   const rows = (title, items) => `<div class="list"><h3>${title}</h3>${items.map(([a, b]) => `<div class="li"><span>${a}</span><span>${b}</span></div>`).join('')}</div>`;
 
+  // 调试数据：训练中数字一直在变、来不及截图，所以全程记录，结束后在结果页 / 历史详情里慢慢看
+  function traceHTML(tr) {
+    if (!tr || !tr.length) return '';
+    const f = v => v == null ? ' -- ' : (v < 0 ? '' : ' ') + v.toFixed(2);
+    const lines = tr.map(r => `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 肘${r[3] == null ? '--' : r[3]} 手${f(r[4])} 速${f(r[5])} 脚${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`);
+    return `<details class="list"><summary style="padding:12px 14px;color:var(--mute);font-size:14px">调试数据（${tr.length} 行，用于调参）</summary>
+      <pre class="trace">时间 左/右脚离地(unit) 肘角 手腕高 肩速 脚ok 姿势ok 计时\n${lines.join('\n')}</pre></details>`;
+  }
   function detailHTML(s) {
     const r = s.result;
     let h = `<p class="hint" style="margin-top:0">${fmtDate(s.startedAt)} · 本轮用时 ${fmtLong(s.durationMs)}</p><div class="stats">`;
@@ -288,6 +296,7 @@
       h += stat('总悬挂时长', fmt(r.totalMs), 'hl') + stat('悬挂段数', r.count) + stat('中断次数', r.interruptions) +
         stat('平均单次', fmt(r.avgMs)) + stat('最长单次', fmt(r.maxMs)) + '</div>';
       h += rows('每段悬挂（按时间顺序）', r.segments.map((x, i) => [`第 ${i + 1} 段 · +${fmt(x.offsetMs).replace(/\.\d$/, '')}`, fmt(x.ms)]));
+      h += traceHTML(r.trace);
     } else {
       const best = r.groups.length ? Math.max(...r.groups) : 0;
       h += stat('总次数', r.total, 'hl') + stat('组数', r.groups.length) + stat('最多一组', best) + '</div>';
@@ -299,7 +308,7 @@
 
   function showResult(s, o = {}) {
     $('#rTitle').textContent = MODE_NAME[s.mode] + (o.fresh ? ' · 本轮结果' : '');
-    $('#rBody').innerHTML = o.empty ? '<p class="empty">本轮没有记录到有效数据，未保存。</p>' : detailHTML(s);
+    $('#rBody').innerHTML = o.empty ? '<p class="empty">本轮没有记录到有效数据，未保存。</p>' + (s.mode === 'hang' ? traceHTML(s.result.trace) : '') : detailHTML(s);
     const a = $('#rActions'); a.innerHTML = '';
     if (o.fresh) {
       a.append(

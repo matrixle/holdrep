@@ -111,3 +111,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .big-mode #hCur{font-size:22vw;line-height:1.05}
 .big-mode #hTot{font-size:10vw}
 .big-mode #pCount{line-height:1}
+
+.trace{margin:0;padding:10px 14px;font:11px/1.5 ui-monospace,Menlo,monospace;color:#cbd3dd;overflow-x:auto;max-height:60vh;overflow-y:auto;-webkit-user-select:text;user-select:text;white-space:pre}
+details summary{cursor:pointer}
