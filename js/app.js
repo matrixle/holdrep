@@ -158,7 +158,7 @@
     const gs = T.mode === 'hang' && d.groundState;
     if (T.mode === 'hang' && T.phase !== 'paused' && present && d.status !== 'hanging' && C.HANG_REQUIRE_FEET_OFF_GROUND) {
       if (gs === 'nocalib') return ['warn', '先双脚着地、双手放下站一下（校准）'];
-      if (gs === 'unknown') return ['warn', '需拍到脚或膝盖以判断离地'];
+      if (gs === 'unknown') return ['warn', '需完整拍到双脚（或双膝）以判断离地'];
     }
     if (T.phase === 'idle') return present ? ['ok', '已识别 · 点「开始」'] : ['warn', '未检测到人 · 请入镜'];
     if (T.phase === 'paused') return ['warn', '⏸ 已手动暂停'];

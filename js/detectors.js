@@ -40,10 +40,12 @@
       if (ang == null) return;
       arms.push({ angle: ang, wristUp: (s.y - w.y) / unit, wrist: w });
     });
-    const avgY = ids => { const q = ids.map(i => kp(k, i)).filter(Boolean); return q.length ? q.reduce((t, x) => t + x.y, 0) / q.length : null; };
-    const lowY = ids => { const q = ids.map(i => kp(k, i)).filter(Boolean); return q.length ? Math.max(...q.map(x => x.y)) : null; };
+    // 脚/膝的「着地参考高度」：每侧取最低点，两侧再取更低者，且必须两侧都可见。
+    // 这样只抬一只脚时，另一只仍着地的脚会把参考高度留在地面（不会误判为离地）。
+    const lowSide = ids => { const q = ids.map(i => kp(k, i)).filter(Boolean); return q.length ? Math.max(...q.map(x => x.y)) : null; };
+    const lowBoth = (l, r) => { const a = lowSide(l), b = lowSide(r); return a != null && b != null ? Math.max(a, b) : null; };
     return { shoMid, unit, arms, nose: kp(k, 0),
-      ankleY: lowY([15, 16, 17, 18, 19, 20]), kneeY: avgY([13, 14]), // 脚部取最低点（踝/脚跟/脚尖）
+      ankleY: lowBoth([15, 17, 19], [16, 18, 20]), kneeY: lowBoth([13], [14]),
       armsDown: arms.length >= 1 && arms.every(m => m.wristUp < 0) }; // 双手垂在身侧 = 站在地面
   }
 
