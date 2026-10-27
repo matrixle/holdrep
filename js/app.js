@@ -15,6 +15,10 @@
     const r = Math.floor((s - m * 60) * 10) / 10;
     return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1);
   }
+  const fmtBig = ms => { // iOS 秒表样式 mm:ss.cc
+    const cs = Math.floor(Math.max(0, ms) / 10);
+    return pad(Math.floor(cs / 6000)) + ':' + pad(Math.floor(cs / 100) % 60) + '.' + pad(cs % 100);
+  };
   function fmtLong(ms) { // 累计时长：h m s
     const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
     return h ? `${h}h ${pad(m)}m` : m ? `${m}m ${pad(s % 60)}s` : `${s}s`;
@@ -71,7 +75,7 @@
   async function enterTrain(mode) {
     Object.assign(T, { mode, phase: 'idle', pose: null, on: false, mdl: getModelId(), ms: 0 });
     T.det = mode === 'hang' ? new D.HangDetector() : new D.PullupDetector(beep);
-    show('train');
+    show('train'); applyBig();
     $('#hudHang').style.display = mode === 'hang' ? '' : 'none';
     $('#hudPull').style.display = mode === 'pullup' ? '' : 'none';
     T.init = { t0: performance.now(), cam: false, mdl: false, tick: 0 };
@@ -113,6 +117,7 @@
   function loop() {
     if (!T.on) return;
     T.raf = requestAnimationFrame(loop);
+    updateNums();
     const now = performance.now();
     if (T.busy || now - T.last < C.DETECT_INTERVAL_MS || cam.readyState < 2) return;
     T.busy = true; T.last = now;
@@ -166,14 +171,37 @@
       ready: ['ok', '● 起始位就绪'], pulling: ['ok', '● 动作中'],
       paused: ['warn', '⏸ 自动暂停 · 回到悬垂继续'] })[d.status];
   }
-  function render() {
-    const d = T.det;
+  // 大字模式开关（记住选择，默认开启）
+  const getBig = () => { try { return localStorage.getItem('hr_big') !== '0'; } catch (e) { return true; } };
+  let big = getBig();
+  function applyBig() {
+    $('#v-train').classList.toggle('big-mode', big);
+    $$('#segBig button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === big));
+    if (T.mode === 'pullup') { const n = String(T.det ? T.det.count : 0).length; $('#pCount').style.fontSize = big ? (n >= 3 ? '38vw' : '58vw') : ''; }
+    updateNums();
+  }
+  function setBig(v) { big = v; try { localStorage.setItem('hr_big', v ? '1' : '0'); } catch (e) {} applyBig(); }
+  $('#bigToggle').onclick = () => setBig(!big);
+  $$('#segBig button').forEach(b => b.onclick = () => setBig(b.dataset.v === '1'));
+
+  // 数字刷新：每个动画帧调用，并在两次识别之间做线性插值，让毫秒位走得顺滑
+  function updateNums() {
+    const d = T.det; if (!d) return;
     if (T.mode === 'hang') {
-      $('#hCur').textContent = fmt(d.cur); $('#hTot').textContent = fmt(d.totalMs);
+      let cur = d.cur, tot = d.totalMs;
+      if (T.phase === 'running' && d.active && d.lastT != null) {
+        const extra = Math.min(performance.now() - d.lastT, 300); cur += extra; tot += extra;
+      }
+      const f = big ? fmtBig : fmt;
+      $('#hCur').textContent = f(cur); $('#hTot').textContent = f(tot);
     } else {
       $('#pCount').textContent = d.count;
       $('#pLabel').textContent = d.count ? `次数 · 第 ${d.currentGroup} 组` : '次数';
+      if (big) $('#pCount').style.fontSize = String(d.count).length >= 3 ? '38vw' : '58vw';
     }
+  }
+  function render() {
+    updateNums();
     updatePerf();
     const [cls, txt] = pillState();
     const p = $('#pill'); p.className = 'pill ' + cls; p.textContent = txt;
@@ -359,7 +387,7 @@
   $$('[data-home]').forEach(b => b.onclick = () => show('home'));
   $('#goHistory').onclick = openHistory;
   $('#goReport').onclick = openReport;
-  show('home');
+  show('home'); applyBig();
   const showVer = (cache) => { $('#ver').textContent = `版本 ${HR_BUILD.version} · 更新于 ${HR_BUILD.time}` + (cache ? ` · 缓存 ${cache}` : ''); };
   showVer();
   // 当前实际生效的 Service Worker 缓存名：与版本不一致说明手机上还是旧缓存
