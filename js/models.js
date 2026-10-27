@@ -9,7 +9,12 @@
     document.head.appendChild(s);
   });
 
-  const st = t => { g.HR_MODELS.stage = t; };
+  const T0 = performance.now();
+  const st = t => { // 当前阶段 + 带时间戳的日志（超时时显示在屏幕上，也输出到控制台）
+    g.HR_MODELS.stage = t;
+    const line = ((performance.now() - T0) / 1000).toFixed(1) + 's ' + t;
+    g.HR_MODELS.log.push(line); console.log('[HR]', line);
+  };
   async function tfReady() {
     if (!g.tf) {
       st('加载 tf.js'); await loadScript('vendor/tf.min.js');
@@ -25,9 +30,24 @@
   function movenet(type, url) {
     return async () => {
       await tfReady();
-      st('加载模型文件并预热');
+      // 拆开步骤，便于定位 iOS 上究竟卡在 下载 / 解析 / 预热 哪一段
+      st('下载 model.json');
+      const mj = await (await fetch(url)).json();
+      const base = url.replace(/[^/]*$/, ''), paths = mj.weightsManifest.flatMap(m => m.paths);
+      for (let i = 0; i < paths.length; i++) {
+        st(`下载权重 ${i + 1}/${paths.length}`);
+        await (await fetch(base + paths[i])).arrayBuffer();
+      }
+      st('解析模型 loadGraphModel');
+      const gm = await tf.loadGraphModel(url);
+      st('预热推理(1/2) 创建输入');
+      const shp = gm.inputs[0].shape, x = tf.zeros([1, shp[1], shp[2], 3], 'int32');
+      st('预热推理(2/2) 执行并读回');
+      const y = gm.execute(x); await y.data(); x.dispose(); y.dispose(); gm.dispose();
+      st('创建 detector');
       const det = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
         modelType: poseDetection.movenet.modelType[type], modelUrl: url, enableSmoothing: true });
+      st('模型就绪');
       return { estimate: async v => (await det.estimatePoses(v, { flipHorizontal: false }))[0] || null };
     };
   }
@@ -63,7 +83,7 @@
   ];
   const cache = {};
   g.HR_MODELS = {
-    list: LIST, stage: '', backend: '',
+    list: LIST, stage: '', backend: '', log: [],
     load(id) {
       const m = LIST.find(x => x.id === id) || LIST[0];
       return cache[m.id] || (cache[m.id] = m.load().catch(e => { delete cache[m.id]; throw e; }));

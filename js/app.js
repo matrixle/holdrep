@@ -94,7 +94,7 @@
     } catch (e) {
       clearInterval(T.initTimer); T.init = null;
       stopCamera();
-      let m = '启动失败：' + (e.message || e);
+      let m = '启动失败：' + (e.message || e) + '<br><small style="color:#9aa4b2;text-align:left;display:block">' + HR_MODELS.log.slice(-8).join('<br>') + '</small>';
       if (e.name === 'NotAllowedError') m = '没有摄像头权限。<br>请到「设置 › Safari › 摄像头」选择「询问」或「允许」，然后重试。';
       else if (e.name === 'Insecure') m = '当前页面不是 HTTPS，浏览器禁止调用摄像头。<br>请用 HTTPS 地址打开（见 README）。';
       else if (e.name === 'NotFoundError') m = '未找到摄像头。';
