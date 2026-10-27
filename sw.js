@@ -1,21 +1,18 @@
 /* Service Worker：离线缓存。发布前运行 ./bump.sh 递增版本（读取 js/version.js）。 */
 importScripts('js/version.js');
 const VERSION = 'holdrep-' + HR_BUILD.version;
-const ASSETS = [
+// 核心资源：安装时一次性缓存（含默认模型 Lightning），约 7MB
+const CORE = [
   './', 'index.html', 'manifest.webmanifest',
   'css/app.css', 'js/version.js', 'js/config.js', 'js/detectors.js', 'js/db.js', 'js/models.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
   'vendor/tf.min.js', 'vendor/pose.min.js',
   'vendor/movenet/model.json', 'vendor/movenet/group1-shard1of2.bin', 'vendor/movenet/group1-shard2of2.bin',
-  'vendor/movenet-thunder/model.json', 'vendor/movenet-thunder/group1-shard1of3.bin',
-  'vendor/movenet-thunder/group1-shard2of3.bin', 'vendor/movenet-thunder/group1-shard3of3.bin',
-  'vendor/mediapipe/vision_bundle.mjs', 'vendor/mediapipe/pose_landmarker_full.task',
-  'vendor/mediapipe/wasm/vision_wasm_internal.js', 'vendor/mediapipe/wasm/vision_wasm_internal.wasm',
-  'vendor/mediapipe/wasm/vision_wasm_module_internal.js', 'vendor/mediapipe/wasm/vision_wasm_module_internal.wasm',
 ];
+// Thunder / BlazePose（约 50MB）不在安装时下载，避免抢带宽；首次选用时由下面的 fetch 逻辑自动缓存，之后离线可用。
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {

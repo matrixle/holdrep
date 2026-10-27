@@ -15,6 +15,17 @@
     const line = ((performance.now() - T0) / 1000).toFixed(1) + 's ' + t;
     g.HR_MODELS.log.push(line); console.log('[HR]', line);
   };
+  // 带进度的下载（进度只更新 stage，不写日志）；首次下载会被 Service Worker 缓存
+  async function download(url, label) {
+    st(label);
+    const r = await fetch(url), total = +r.headers.get('content-length') || 0, rd = r.body.getReader();
+    let got = 0;
+    for (;;) {
+      const { done, value } = await rd.read(); if (done) break;
+      got += value.length;
+      g.HR_MODELS.stage = `${label} ${(got / 1048576).toFixed(1)}${total ? '/' + (total / 1048576).toFixed(1) : ''}MB`;
+    }
+  }
   async function tfReady() {
     if (!g.tf) {
       st('加载 tf.js'); await loadScript('vendor/tf.min.js');
@@ -34,10 +45,7 @@
       st('下载 model.json');
       const mj = await (await fetch(url)).json();
       const base = url.replace(/[^/]*$/, ''), paths = mj.weightsManifest.flatMap(m => m.paths);
-      for (let i = 0; i < paths.length; i++) {
-        st(`下载权重 ${i + 1}/${paths.length}`);
-        await (await fetch(base + paths[i])).arrayBuffer();
-      }
+      for (let i = 0; i < paths.length; i++) await download(base + paths[i], `下载权重 ${i + 1}/${paths.length}`);
       st('解析模型 loadGraphModel');
       const gm = await tf.loadGraphModel(url);
       st('预热推理(1/2) 创建输入');

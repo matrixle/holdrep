@@ -83,7 +83,7 @@
       T.mdl = getModelId();
       const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + '超时' + (what === '模型加载' ? '（卡在：' + (HR_MODELS.stage || '未开始') + '）' : ''))), ms))]);
       const camP = withTimeout(startCamera().then(r => { T.init.cam = true; return r; }), 20000, '摄像头启动');
-      const [, model] = await Promise.all([camP, withTimeout(HR_MODELS.load(T.mdl).then(r => { T.init.mdl = true; return r; }), 60000, '模型加载')]);
+      const [, model] = await Promise.all([camP, withTimeout(HR_MODELS.load(T.mdl).then(r => { T.init.mdl = true; return r; }), 300000, '模型加载')]);
       T.model = model; T.ms = 0; updatePerf();
       clearInterval(T.initTimer); T.init = null;
       if (!$('#v-train').classList.contains('on')) { stopCamera(); return; }
@@ -145,7 +145,7 @@
     return `${SPIN[i.tick % 10]} 摄像头${i.cam ? '✓' : '…'} 模型${i.mdl ? '✓' : '… ' + (HR_MODELS.stage || '')} ${secs}s`;
   }
   function initMsg() {
-    setMsg(`正在初始化<br><b>${initText()}</b><br><small style="color:#9aa4b2">如弹出摄像头权限提示请选「允许」。<br>转圈和秒数在变化 = 正在加载；停止变化 = 页面卡死</small>`);
+    setMsg(`正在初始化<br><b>${initText()}</b><br><small style="color:#9aa4b2">如弹出摄像头权限提示请选「允许」。<br>转圈和秒数在变化 = 正在加载；停止变化 = 页面卡死。<br>首次使用某个模型需要下载，网络慢时可能要几十秒，之后会缓存</small>`);
   }
   function pillState() {
     if (T.init) return ['warn', '准备中 ' + initText()];
