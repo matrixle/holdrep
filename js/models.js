@@ -9,14 +9,23 @@
     document.head.appendChild(s);
   });
 
+  const st = t => { g.HR_MODELS.stage = t; };
   async function tfReady() {
-    if (!g.tf) { await loadScript('vendor/tf.min.js'); await loadScript('vendor/pose.min.js'); }
-    await tf.setBackend('webgl'); await tf.ready();
+    if (!g.tf) {
+      st('加载 tf.js'); await loadScript('vendor/tf.min.js');
+      st('加载 pose-detection'); await loadScript('vendor/pose.min.js');
+    }
+    st('初始化 WebGL');
+    const ok = await Promise.race([tf.setBackend('webgl'), new Promise(r => setTimeout(r, 15000, 'timeout'))]);
+    if (ok !== true) { st('WebGL 失败，改用 CPU'); await tf.setBackend('cpu'); } // 慢，但保证能跑
+    await tf.ready();
+    g.HR_MODELS.backend = tf.getBackend();
   }
 
   function movenet(type, url) {
     return async () => {
       await tfReady();
+      st('加载模型文件并预热');
       const det = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
         modelType: poseDetection.movenet.modelType[type], modelUrl: url, enableSmoothing: true });
       return { estimate: async v => (await det.estimatePoses(v, { flipHorizontal: false }))[0] || null };
@@ -27,13 +36,15 @@
   const BP = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
   const BP_TO = [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
   async function blaze() {
+    st('加载 MediaPipe 脚本');
     const mod = await import(new URL('vendor/mediapipe/vision_bundle.mjs', document.baseURI).href);
+    st('加载 wasm');
     const fileset = await mod.FilesetResolver.forVisionTasks('vendor/mediapipe/wasm');
     const make = delegate => mod.PoseLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: 'vendor/mediapipe/pose_landmarker_full.task', delegate },
       runningMode: 'VIDEO', numPoses: 1 });
-    let lm;
-    try { lm = await make('GPU'); } catch (e) { console.warn('GPU 委托失败，退回 CPU', e); lm = await make('CPU'); }
+    let lm; st('加载模型(GPU)');
+    try { lm = await make('GPU'); } catch (e) { console.warn('GPU 委托失败，退回 CPU', e); st('GPU 失败，加载模型(CPU)'); lm = await make('CPU'); }
     let lastTs = 0;
     return { estimate: async v => {
       const ts = Math.max(performance.now(), lastTs + 1); lastTs = ts;
@@ -52,7 +63,7 @@
   ];
   const cache = {};
   g.HR_MODELS = {
-    list: LIST,
+    list: LIST, stage: '', backend: '',
     load(id) {
       const m = LIST.find(x => x.id === id) || LIST[0];
       return cache[m.id] || (cache[m.id] = m.load().catch(e => { delete cache[m.id]; throw e; }));

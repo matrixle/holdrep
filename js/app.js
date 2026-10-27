@@ -81,7 +81,7 @@
     try {
       // getUserMedia 紧跟点击手势发起，满足 iOS 权限弹窗要求
       T.mdl = getModelId();
-      const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + '超时')), ms))]);
+      const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + '超时' + (what === '模型加载' ? '（卡在：' + (HR_MODELS.stage || '未开始') + '）' : ''))), ms))]);
       const camP = withTimeout(startCamera().then(r => { T.init.cam = true; return r; }), 20000, '摄像头启动');
       const [, model] = await Promise.all([camP, withTimeout(HR_MODELS.load(T.mdl).then(r => { T.init.mdl = true; return r; }), 60000, '模型加载')]);
       T.model = model; T.ms = 0; updatePerf();
@@ -125,7 +125,7 @@
   }
 
   /* ---------- 模型选择（首页）/ 训练页切换 ---------- */
-  function updatePerf() { $('#perf').textContent = `${modelLabel(T.mdl)}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}${T.phase === 'idle' ? ' ⟳' : ''}`; }
+  function updatePerf() { $('#perf').textContent = `${modelLabel(T.mdl)}${HR_MODELS.backend && T.mdl !== 'blaze' ? '/' + HR_MODELS.backend : ''}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}${T.phase === 'idle' ? ' ⟳' : ''}`; }
   $('#perf').onclick = async () => { // 训练开始前，点一下循环切换模型，便于对比
     if (T.phase !== 'idle' || !T.on || T.switching) return;
     const L = HR_MODELS.list, next = L[(L.findIndex(m => m.id === T.mdl) + 1) % L.length].id;
@@ -142,7 +142,7 @@
   const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
   function initText() {
     const i = T.init, secs = Math.floor((performance.now() - i.t0) / 1000);
-    return `${SPIN[i.tick % 10]} 摄像头${i.cam ? '✓' : '…'} 模型${i.mdl ? '✓' : '…'} ${secs}s`;
+    return `${SPIN[i.tick % 10]} 摄像头${i.cam ? '✓' : '…'} 模型${i.mdl ? '✓' : '… ' + (HR_MODELS.stage || '')} ${secs}s`;
   }
   function initMsg() {
     setMsg(`正在初始化<br><b>${initText()}</b><br><small style="color:#9aa4b2">如弹出摄像头权限提示请选「允许」。<br>转圈和秒数在变化 = 正在加载；停止变化 = 页面卡死</small>`);
