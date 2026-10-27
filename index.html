@@ -32,6 +32,7 @@
   <div class="card" style="margin-top:4px"><small style="color:var(--mute)">识别模型（可在训练页顶部点击切换对比）</small>
     <div class="seg" id="segModel" style="margin:8px 0 0"><button data-v="lightning">Lightning</button><button data-v="thunder">Thunder</button><button data-v="blaze">BlazePose</button></div></div>
   <p class="hint">手机竖屏立在前方，前置摄像头拍到你的上半身与单杠。</p>
+  <p class="hint ver" id="ver"></p>
 </section>
 
 <!-- 训练页 -->
@@ -87,6 +88,7 @@
   <p class="hint" id="chartSum"></p>
 </section>
 
+<script src="js/version.js"></script>
 <script src="js/config.js"></script>
 <script src="js/detectors.js"></script>
 <script src="js/db.js"></script>

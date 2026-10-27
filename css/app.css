@@ -92,3 +92,5 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .seg button.on{background:#2a313b;color:#fff}
 .chart{padding:10px 6px 6px}
 .chart svg{width:100%;height:auto;display:block}
+
+.ver{text-align:center;font-size:12px;opacity:.8;font-variant-numeric:tabular-nums}

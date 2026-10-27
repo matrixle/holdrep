@@ -45,9 +45,9 @@ python3 serve.py 192.168.x.x.pem 192.168.x.x-key.pem
 - 报表：总览指标 + 近 7 / 30 天每日趋势。
 
 ## 调参
-改 `js/config.js` 后，把 `sw.js` 的 `VERSION` 加一（如 `holdrep-v2`）以刷新缓存。常见问题：
+改 `js/config.js` 后，运行 `./bump.sh` 刷新缓存版本。常见问题：
 - 悬垂不计时 → 降低 `HANG_ANGLE_ENTER`、`HANG_WRIST_ABOVE`，或调大 `HANG_MAX_SWING_SPEED`
 - 引体漏计 → 增大 `PULLUP_CHIN_MARGIN` 或增大 `PULLUP_TOP_ELBOW_ANGLE`；回落不算 → 降低 `PULLUP_START_ANGLE`
 - 手机发热/卡顿 → 增大 `DETECT_INTERVAL_MS`，或 `SHOW_SKELETON:false`
 
-更新应用文件后记得递增 `sw.js` 的 `VERSION`。
+发布前运行 `./bump.sh`（自动递增 `js/version.js` 的版本号并写入时间，`sw.js` 缓存名同步使用它），首页底部会显示「版本 · 更新于 · 缓存」，用来确认手机是否已是最新版。

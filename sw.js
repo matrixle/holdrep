@@ -1,8 +1,9 @@
-/* Service Worker：离线缓存。更新应用文件后请递增 VERSION。 */
-const VERSION = 'holdrep-v6';
+/* Service Worker：离线缓存。发布前运行 ./bump.sh 递增版本（读取 js/version.js）。 */
+importScripts('js/version.js');
+const VERSION = 'holdrep-' + HR_BUILD.version;
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest',
-  'css/app.css', 'js/config.js', 'js/detectors.js', 'js/db.js', 'js/models.js', 'js/app.js',
+  'css/app.css', 'js/version.js', 'js/config.js', 'js/detectors.js', 'js/db.js', 'js/models.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
   'vendor/tf.min.js', 'vendor/pose.min.js',
   'vendor/movenet/model.json', 'vendor/movenet/group1-shard1of2.bin', 'vendor/movenet/group1-shard2of2.bin',

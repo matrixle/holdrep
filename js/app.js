@@ -36,7 +36,7 @@
   const MODEL_KEY = 'hr_model';
   const getModelId = () => { try { return localStorage.getItem(MODEL_KEY) || 'lightning'; } catch (e) { return 'lightning'; } };
   const setModelId = id => { try { localStorage.setItem(MODEL_KEY, id); } catch (e) {} };
-  const modelLabel = id => HR_MODELS.list.find(m => m.id === id).label;
+  const modelLabel = id => (HR_MODELS.list.find(m => m.id === id) || HR_MODELS.list[0]).label;
 
   async function startCamera() {
     stopCamera();
@@ -69,26 +69,30 @@
   }
 
   async function enterTrain(mode) {
-    Object.assign(T, { mode, phase: 'idle', pose: null, on: false });
+    Object.assign(T, { mode, phase: 'idle', pose: null, on: false, mdl: getModelId(), ms: 0 });
     T.det = mode === 'hang' ? new D.HangDetector() : new D.PullupDetector(beep);
     show('train');
     $('#hudHang').style.display = mode === 'hang' ? '' : 'none';
     $('#hudPull').style.display = mode === 'pullup' ? '' : 'none';
-    updateButtons(); render();
-    setMsg('正在启动摄像头…<br>（如弹出权限提示请选「允许」）');
+    T.init = { t0: performance.now(), cam: false, mdl: false, tick: 0 };
+    clearInterval(T.initTimer);
+    T.initTimer = setInterval(() => { T.init.tick++; initMsg(); render(); }, 200); // 转圈 + 秒数；若不再变化即为假死
+    updateButtons(); initMsg(); render();
     try {
       // getUserMedia 紧跟点击手势发起，满足 iOS 权限弹窗要求
       T.mdl = getModelId();
       const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + '超时')), ms))]);
-      const camP = withTimeout(startCamera().then(r => { setMsg('摄像头已就绪，正在加载模型…'); return r; }), 20000, '摄像头启动');
-      const [, model] = await Promise.all([camP, withTimeout(HR_MODELS.load(T.mdl), 60000, '模型加载')]);
+      const camP = withTimeout(startCamera().then(r => { T.init.cam = true; return r; }), 20000, '摄像头启动');
+      const [, model] = await Promise.all([camP, withTimeout(HR_MODELS.load(T.mdl).then(r => { T.init.mdl = true; return r; }), 60000, '模型加载')]);
       T.model = model; T.ms = 0; updatePerf();
+      clearInterval(T.initTimer); T.init = null;
       if (!$('#v-train').classList.contains('on')) { stopCamera(); return; }
       setMsg('');
       T.on = true; T.busy = false; T.last = 0;
       lockScreen();
       loop();
     } catch (e) {
+      clearInterval(T.initTimer); T.init = null;
       stopCamera();
       let m = '启动失败：' + (e.message || e);
       if (e.name === 'NotAllowedError') m = '没有摄像头权限。<br>请到「设置 › Safari › 摄像头」选择「询问」或「允许」，然后重试。';
@@ -99,6 +103,7 @@
   }
 
   function leaveTrain() {
+    clearInterval(T.initTimer); T.init = null;
     T.on = false; cancelAnimationFrame(T.raf);
     stopCamera(); unlockScreen(); setMsg('');
     show('home');
@@ -134,7 +139,16 @@
   syncModelSeg();
 
   /* ---------- 训练页渲染 ---------- */
+  const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+  function initText() {
+    const i = T.init, secs = Math.floor((performance.now() - i.t0) / 1000);
+    return `${SPIN[i.tick % 10]} 摄像头${i.cam ? '✓' : '…'} 模型${i.mdl ? '✓' : '…'} ${secs}s`;
+  }
+  function initMsg() {
+    setMsg(`正在初始化<br><b>${initText()}</b><br><small style="color:#9aa4b2">如弹出摄像头权限提示请选「允许」。<br>转圈和秒数在变化 = 正在加载；停止变化 = 页面卡死</small>`);
+  }
   function pillState() {
+    if (T.init) return ['warn', '准备中 ' + initText()];
     const present = !!D.analyze(T.pose), d = T.det;
     const gs = T.mode === 'hang' && d.groundState;
     if (T.mode === 'hang' && T.phase !== 'paused' && present && d.status !== 'hanging' && C.HANG_REQUIRE_FEET_OFF_GROUND) {
@@ -346,5 +360,9 @@
   $('#goHistory').onclick = openHistory;
   $('#goReport').onclick = openReport;
   show('home');
+  const showVer = (cache) => { $('#ver').textContent = `版本 ${HR_BUILD.version} · 更新于 ${HR_BUILD.time}` + (cache ? ` · 缓存 ${cache}` : ''); };
+  showVer();
+  // 当前实际生效的 Service Worker 缓存名：与版本不一致说明手机上还是旧缓存
+  if (window.caches) caches.keys().then(ks => showVer(ks.filter(k => k.startsWith('holdrep-')).join(',') || '无')).catch(() => {});
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.error);
 })();
