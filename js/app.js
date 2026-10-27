@@ -130,7 +130,7 @@
   }
 
   /* ---------- 模型选择（首页）/ 训练页切换 ---------- */
-  function updatePerf() { $('#perf').textContent = `${modelLabel(T.mdl)}${HR_MODELS.backend && T.mdl !== 'blaze' ? '/' + HR_MODELS.backend : ''}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}${T.phase === 'idle' ? ' ⟳' : ''}`; }
+  function updatePerf() { $('#perf').textContent = `${modelLabel(T.mdl)}${T.mode === 'hang' && T.det && T.det.lift != null ? ' ↑' + T.det.lift.toFixed(2) : ''}${HR_MODELS.backend && T.mdl !== 'blaze' ? '/' + HR_MODELS.backend : ''}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}${T.phase === 'idle' ? ' ⟳' : ''}`; }
   $('#perf').onclick = async () => { // 训练开始前，点一下循环切换模型，便于对比
     if (T.phase !== 'idle' || !T.on || T.switching) return;
     const L = HR_MODELS.list, next = L[(L.findIndex(m => m.id === T.mdl) + 1) % L.length].id;

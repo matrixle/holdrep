@@ -40,12 +40,11 @@
       if (ang == null) return;
       arms.push({ angle: ang, wristUp: (s.y - w.y) / unit, wrist: w });
     });
-    // 脚/膝的「着地参考高度」：每侧取最低点，两侧再取更低者，且必须两侧都可见。
-    // 这样只抬一只脚时，另一只仍着地的脚会把参考高度留在地面（不会误判为离地）。
-    const lowSide = ids => { const q = ids.map(i => kp(k, i)).filter(Boolean); return q.length ? Math.max(...q.map(x => x.y)) : null; };
-    const lowBoth = (l, r) => { const a = lowSide(l), b = lowSide(r); return a != null && b != null ? Math.max(a, b) : null; };
+    // 脚/膝的高度：每侧各取最低点（踝/脚跟/脚尖）。左右分开，各自与自己的地面基线比较，
+    // 这样站立时双脚前后位置不同、或只抬一只脚，都不会被误判为离地。
+    const low = ids => { const q = ids.map(i => kp(k, i)).filter(Boolean); return q.length ? Math.max(...q.map(x => x.y)) : null; };
     return { shoMid, unit, arms, nose: kp(k, 0),
-      ankleY: lowBoth([15, 17, 19], [16, 18, 20]), kneeY: lowBoth([13], [14]),
+      ankle: [low([15, 17, 19]), low([16, 18, 20])], knee: [low([13]), low([14])],
       armsDown: arms.length >= 1 && arms.every(m => m.wristUp < 0) }; // 双手垂在身侧 = 站在地面
   }
 
@@ -72,27 +71,38 @@
       this.speed = 0;
       this.present = false;
       // 地面校准：双手放下站立时记录脚踝/膝盖的 y，之后脚比它高 = 离地
-      this.ground = { ankle: null, knee: null, unit: null };
+      this.ground = { ankle: [null, null], knee: [null, null], unit: null };
       this.groundState = 'nocalib'; // nocalib | unknown | onground | lifted
+      this.lift = null;             // 当前「较低那只脚」的离地高度（unit），仅供调试显示
     }
     _learn(a) {
       if (!a || !a.armsDown) return;
       const g = this.ground, ema = (o, n) => o == null ? n : o * 0.9 + n * 0.1;
-      if (a.ankleY != null) g.ankle = ema(g.ankle, a.ankleY);
-      if (a.kneeY != null) g.knee = ema(g.knee, a.kneeY);
-      if (a.ankleY != null || a.kneeY != null) g.unit = ema(g.unit, a.unit);
+      let any = false;
+      ['ankle', 'knee'].forEach(key => [0, 1].forEach(i => {
+        if (a[key][i] != null) { g[key][i] = ema(g[key][i], a[key][i]); any = true; }
+      }));
+      if (any) g.unit = ema(g.unit, a.unit);
     }
     calibrate(pose) { this._learn(analyze(pose)); } // 未开始/暂停时也持续校准
+    // 双脚都必须离地：取两侧离地高度的较小者
     _feetOff(a) {
       const c = cfg(), g = this.ground;
       if (!c.HANG_REQUIRE_FEET_OFF_GROUND) return true;
-      const lift = c.HANG_FEET_LIFT * (this.active ? 0.5 : 1); // 已悬垂时放宽，防抖
+      const thr = c.HANG_FEET_LIFT * (this.active ? c.HANG_FEET_HOLD_RATIO : 1); // 已悬垂时放宽，防抖
       let d = null;
-      if (g.ankle != null && a.ankleY != null) d = (g.ankle - a.ankleY) / g.unit;
-      else if (g.knee != null && a.kneeY != null) d = (g.knee - a.kneeY) / g.unit;
-      if (d == null) { this.groundState = g.ankle == null && g.knee == null ? 'nocalib' : 'unknown'; return false; }
-      this.groundState = d >= lift ? 'lifted' : 'onground';
-      return d >= lift;
+      for (const key of ['ankle', 'knee']) {
+        if ([0, 1].every(i => g[key][i] != null && a[key][i] != null)) {
+          d = Math.min(...[0, 1].map(i => (g[key][i] - a[key][i]) / g.unit)); break;
+        }
+      }
+      this.lift = d;
+      if (d == null) {
+        this.groundState = g.ankle.every(v => v == null) && g.knee.every(v => v == null) ? 'nocalib' : 'unknown';
+        return false;
+      }
+      this.groundState = d >= thr ? 'lifted' : 'onground';
+      return d >= thr;
     }
     get totalMs() { return this.segments.reduce((s, x) => s + x.ms, 0) + this.cur; }
     get status() { return this.active ? 'hanging' : (this.segments.length ? 'paused' : 'waiting'); }

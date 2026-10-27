@@ -15,7 +15,8 @@ window.HR_CONFIG = {
   HANG_REQUIRE_BOTH_ARMS: false,// true=必须两只手臂都被识别到
   HANG_MAX_SWING_SPEED: 1.5,    // 肩部移动速度上限（unit/秒），超过视为非静止（如跳上杠）
   HANG_REQUIRE_FEET_OFF_GROUND: true, // 必须脚离地才计时（需先站立校准地面，见 detectors.js）
-  HANG_FEET_LIFT: 0.1,          // 脚踝/膝盖比站立校准位置高出多少 unit 才算离地（≈肩宽×0.1，约 4cm；杠低时可再调小，误判时调大）
+  HANG_FEET_HOLD_RATIO: 0.7,    // 已在悬垂中时，离地门槛 = HANG_FEET_LIFT × 此值（防抖）
+  HANG_FEET_LIFT: 0.12,          // 脚踝/膝盖比站立校准位置高出多少 unit 才算离地（≈肩宽×0.12，约 5cm；杠低时可再调小，误判时调大；训练页顶部标签的 ↑数值 即当前离地高度，便于调参）
   HANG_ENTER_MS: 400,           // 姿势持续多久才开始计时（计时会回溯补上）
   HANG_EXIT_MS: 700,            // 姿势丢失多久才判定中断（短暂丢失不会中断）
   HANG_MIN_SEGMENT_MS: 1000,    // 短于此的悬挂段视为误触，丢弃
