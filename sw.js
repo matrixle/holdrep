@@ -1,11 +1,16 @@
 /* Service Worker：离线缓存。更新应用文件后请递增 VERSION。 */
-const VERSION = 'holdrep-v4';
+const VERSION = 'holdrep-v5';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest',
-  'css/app.css', 'js/config.js', 'js/detectors.js', 'js/db.js', 'js/app.js',
+  'css/app.css', 'js/config.js', 'js/detectors.js', 'js/db.js', 'js/models.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
   'vendor/tf.min.js', 'vendor/pose.min.js',
   'vendor/movenet/model.json', 'vendor/movenet/group1-shard1of2.bin', 'vendor/movenet/group1-shard2of2.bin',
+  'vendor/movenet-thunder/model.json', 'vendor/movenet-thunder/group1-shard1of3.bin',
+  'vendor/movenet-thunder/group1-shard2of3.bin', 'vendor/movenet-thunder/group1-shard3of3.bin',
+  'vendor/mediapipe/vision_bundle.mjs', 'vendor/mediapipe/pose_landmarker_full.task',
+  'vendor/mediapipe/wasm/vision_wasm_internal.js', 'vendor/mediapipe/wasm/vision_wasm_internal.wasm',
+  'vendor/mediapipe/wasm/vision_wasm_module_internal.js', 'vendor/mediapipe/wasm/vision_wasm_module_internal.wasm',
 ];
 
 self.addEventListener('install', e => {

@@ -29,6 +29,8 @@
     <button class="card small" id="goHistory">🗂 历史记录</button>
     <button class="card small" id="goReport">📈 数据报表</button>
   </div>
+  <div class="card" style="margin-top:4px"><small style="color:var(--mute)">识别模型（可在训练页顶部点击切换对比）</small>
+    <div class="seg" id="segModel" style="margin:8px 0 0"><button data-v="lightning">Lightning</button><button data-v="thunder">Thunder</button><button data-v="blaze">BlazePose</button></div></div>
   <p class="hint">手机竖屏立在前方，前置摄像头拍到你的上半身与单杠。</p>
 </section>
 
@@ -40,7 +42,7 @@
   <div class="hud">
     <div class="hud-top">
       <button id="btnBack" class="back">‹ 返回</button>
-      <span id="pill" class="pill">准备中</span>
+      <span><button id="perf" class="pill"></button> <span id="pill" class="pill">准备中</span></span>
     </div>
     <div id="hudHang" class="hud-nums">
       <div><small>当前段</small><div id="hCur" class="big">0:00.0</div></div>
@@ -88,6 +90,7 @@
 <script src="js/config.js"></script>
 <script src="js/detectors.js"></script>
 <script src="js/db.js"></script>
+<script src="js/models.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

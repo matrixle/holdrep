@@ -41,8 +41,9 @@
       arms.push({ angle: ang, wristUp: (s.y - w.y) / unit, wrist: w });
     });
     const avgY = ids => { const q = ids.map(i => kp(k, i)).filter(Boolean); return q.length ? q.reduce((t, x) => t + x.y, 0) / q.length : null; };
+    const lowY = ids => { const q = ids.map(i => kp(k, i)).filter(Boolean); return q.length ? Math.max(...q.map(x => x.y)) : null; };
     return { shoMid, unit, arms, nose: kp(k, 0),
-      ankleY: avgY([15, 16]), kneeY: avgY([13, 14]),
+      ankleY: lowY([15, 16, 17, 18, 19, 20]), kneeY: avgY([13, 14]), // 脚部取最低点（踝/脚跟/脚尖）
       armsDown: arms.length >= 1 && arms.every(m => m.wristUp < 0) }; // 双手垂在身侧 = 站在地面
   }
 

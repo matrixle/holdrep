@@ -20,10 +20,6 @@
     return h ? `${h}h ${pad(m)}m` : m ? `${m}m ${pad(s % 60)}s` : `${s}s`;
   }
   const fmtDate = ts => { const d = new Date(ts); return `${d.getMonth() + 1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-  const loadScript = src => new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('加载失败 ' + src));
-    document.head.appendChild(s);
-  });
 
   /* ---------- 训练状态 ---------- */
   const T = { on: false, mode: null, phase: 'idle', det: null, t0: 0, startedAt: 0, model: null, pose: null,
@@ -37,19 +33,10 @@
     } catch (e) {}
   }
 
-  let modelP;
-  function loadModel() {
-    return modelP || (modelP = (async () => {
-      await loadScript('vendor/tf.min.js');
-      await loadScript('vendor/pose.min.js');
-      await tf.setBackend('webgl'); await tf.ready();
-      return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-        modelUrl: 'vendor/movenet/model.json',   // 本地模型，离线可用
-        enableSmoothing: true,
-      });
-    })().catch(e => { modelP = null; throw e; }));
-  }
+  const MODEL_KEY = 'hr_model';
+  const getModelId = () => { try { return localStorage.getItem(MODEL_KEY) || 'lightning'; } catch (e) { return 'lightning'; } };
+  const setModelId = id => { try { localStorage.setItem(MODEL_KEY, id); } catch (e) {} };
+  const modelLabel = id => HR_MODELS.list.find(m => m.id === id).label;
 
   async function startCamera() {
     stopCamera();
@@ -89,8 +76,9 @@
     try {
       // getUserMedia 紧跟点击手势发起，满足 iOS 权限弹窗要求
       const camP = startCamera();
-      const [, model] = await Promise.all([camP, loadModel()]);
-      T.model = model;
+      T.mdl = getModelId();
+      const [, model] = await Promise.all([camP, HR_MODELS.load(T.mdl)]);
+      T.model = model; T.ms = 0; updatePerf();
       if (!$('#v-train').classList.contains('on')) { stopCamera(); return; }
       setMsg('');
       T.on = true; T.busy = false; T.last = 0;
@@ -119,13 +107,27 @@
     const now = performance.now();
     if (T.busy || now - T.last < C.DETECT_INTERVAL_MS || cam.readyState < 2) return;
     T.busy = true; T.last = now;
-    T.model.estimatePoses(cam, { flipHorizontal: false }).then(poses => {
-      T.pose = poses[0] || null;
+    T.model.estimate(cam).then(pose => {
+      T.pose = pose; T.ms = T.ms ? T.ms * 0.8 + (performance.now() - now) * 0.2 : performance.now() - now;
       if (T.phase === 'running') T.det.update(T.pose, performance.now());
       else if (T.det.calibrate) T.det.calibrate(T.pose);
       render();
     }).catch(console.error).finally(() => { T.busy = false; });
   }
+
+  /* ---------- 模型选择（首页）/ 训练页切换 ---------- */
+  function updatePerf() { $('#perf').textContent = `${modelLabel(T.mdl)}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}${T.phase === 'idle' ? ' ⟳' : ''}`; }
+  $('#perf').onclick = async () => { // 训练开始前，点一下循环切换模型，便于对比
+    if (T.phase !== 'idle' || !T.on || T.switching) return;
+    const L = HR_MODELS.list, next = L[(L.findIndex(m => m.id === T.mdl) + 1) % L.length].id;
+    T.switching = true; $('#perf').textContent = '加载 ' + modelLabel(next) + '…';
+    try { T.model = await HR_MODELS.load(next); T.mdl = next; setModelId(next); T.ms = 0; syncModelSeg(); }
+    catch (e) { console.error(e); $('#perf').textContent = modelLabel(next) + ' 加载失败'; await new Promise(r => setTimeout(r, 1500)); }
+    T.switching = false; updatePerf();
+  };
+  function syncModelSeg() { $$('#segModel button').forEach(b => b.classList.toggle('on', b.dataset.v === getModelId())); }
+  $$('#segModel button').forEach(b => b.onclick = () => { setModelId(b.dataset.v); syncModelSeg(); });
+  syncModelSeg();
 
   /* ---------- 训练页渲染 ---------- */
   function pillState() {
@@ -154,6 +156,7 @@
       $('#pCount').textContent = d.count;
       $('#pLabel').textContent = d.count ? `次数 · 第 ${d.currentGroup} 组` : '次数';
     }
+    updatePerf();
     const [cls, txt] = pillState();
     const p = $('#pill'); p.className = 'pill ' + cls; p.textContent = txt;
     drawOverlay();
