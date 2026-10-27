@@ -46,8 +46,11 @@
     T.stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
     cam.srcObject = T.stream;
-    await new Promise(r => { if (cam.videoWidth) r(); else cam.onloadedmetadata = r; });
-    await cam.play().catch(() => {});
+    cam.muted = true; cam.setAttribute('playsinline', '');
+    // iOS Safari 上 loadedmetadata 可能要 play() 之后才触发，所以先 play，再轮询 videoWidth（最多 5s）
+    cam.play().catch(() => {});
+    for (let i = 0; i < 100 && !(cam.videoWidth && cam.readyState >= 2); i++) await new Promise(r => setTimeout(r, 50));
+    if (!cam.videoWidth) throw new Error('摄像头画面未就绪');
   }
   function stopCamera() {
     if (T.stream) T.stream.getTracks().forEach(t => t.stop());
@@ -72,12 +75,13 @@
     $('#hudHang').style.display = mode === 'hang' ? '' : 'none';
     $('#hudPull').style.display = mode === 'pullup' ? '' : 'none';
     updateButtons(); render();
-    setMsg('正在启动摄像头与识别模型…');
+    setMsg('正在启动摄像头…<br>（如弹出权限提示请选「允许」）');
     try {
       // getUserMedia 紧跟点击手势发起，满足 iOS 权限弹窗要求
-      const camP = startCamera();
       T.mdl = getModelId();
-      const [, model] = await Promise.all([camP, HR_MODELS.load(T.mdl)]);
+      const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + '超时')), ms))]);
+      const camP = withTimeout(startCamera().then(r => { setMsg('摄像头已就绪，正在加载模型…'); return r; }), 20000, '摄像头启动');
+      const [, model] = await Promise.all([camP, withTimeout(HR_MODELS.load(T.mdl), 60000, '模型加载')]);
       T.model = model; T.ms = 0; updatePerf();
       if (!$('#v-train').classList.contains('on')) { stopCamera(); return; }
       setMsg('');
