@@ -31,6 +31,10 @@ window.HR_CONFIG = {
   PULLUP_CHIN_OFFSET: 0.3,      // 鼻子到下巴的距离（unit），用鼻子估算下巴
   PULLUP_CHIN_MARGIN: 0.5,      // 下巴距杠不超过多少 unit 即算到顶（0=必须过杠；越大越宽松）
   PULLUP_TOP_ELBOW_ANGLE: 100,  // 或：肘角 ≤ 此值（手臂明显弯曲）也算到顶；设为 0 关闭此条件
+  // 身体必须真的被拉上去（防止坐着 / 站着举手屈伸也被计数）：引体时手腕握杠不动、肩膀上升；
+  // 坐着屈伸手臂则相反，肩膀不动、手腕下落。两者手臂角度变化一样，所以比较「肩膀上升」与「手腕偏离杠」。
+  PULLUP_MIN_RISE: 0.25,        // 到顶时肩膀至少比底部高出多少 unit
+  PULLUP_RISE_RATIO: 2,         // 且肩膀上升量 ≥ 手腕偏离杠高度 × 此倍数
   PULLUP_START_FRAMES: 3,       // 连续多少帧在起始位才确认
   PULLUP_TOP_FRAMES: 2,         // 连续多少帧下巴过杠才确认到顶
   PULLUP_LOST_PAUSE_MS: 2500,   // 人离开画面多久自动暂停

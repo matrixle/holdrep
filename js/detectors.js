@@ -290,8 +290,14 @@
     _track(a, t) {
       if (!a.arms.length) return;
       const c = cfg(), ang = a.arms.reduce((s, m) => s + m.angle, 0) / a.arms.length;
-      const r = this.rep || (this.rep = { t0: t, base: Object.assign({}, this.base), minAng: 180, f: [] });
+      const r = this.rep || (this.rep = { t0: t, base: Object.assign({}, this.base), minAng: 180, f: [], maxRise: 0 });
       if (ang < r.minAng) r.minAng = ang;
+      // 身体是否真的被拉上去：肩膀相对底部的上升量 vs 手腕偏离杠的量
+      const wy = a.arms.reduce((s, m) => s + m.wrist.y, 0) / a.arms.length;
+      r.rise = r.base.shoY != null ? (r.base.shoY - a.shoMid.y) / a.unit : 0;
+      r.drift = this.barY != null ? Math.abs(wy - this.barY) / a.unit : 0;
+      r.lifted = r.rise >= c.PULLUP_MIN_RISE && r.rise >= c.PULLUP_RISE_RATIO * r.drift;
+      if (r.lifted) r.maxRise = Math.max(r.maxRise, r.rise);
       const w = a.w3 || {};
       r.f.push({ t, ang, shoY: a.shoMid.y, mpp: w.mpp, ear: a.earSho, head: a.head,
         chin: this.barY != null && a.nose ? (a.nose.y + c.PULLUP_CHIN_OFFSET * a.unit - this.barY) / a.unit : null, // <0 = 下巴高于杠
@@ -366,7 +372,7 @@
           if (this.armed && this.topReached) {
             this.count++; this.reps.push(t); this.onRep(this.count);
             if (this.rep) { this._flushRep(); this.done = Object.assign(this.rep, { tStart: this.startT, tEnd: this.extT }); }
-          } else if (this.armed && this.rep && this.rep.minAng <= c.PULLUP_START_ANGLE - 15) this.partials++; // 拉了但没到顶
+          } else if (this.armed && this.rep && this.rep.maxRise > 0 && this.rep.minAng <= c.PULLUP_START_ANGLE - 15) this.partials++; // 身体拉起了一些但没到顶
           this.rep = null;
           this.armed = true; this.topReached = false; this.status = 'ready';
         }
@@ -386,6 +392,7 @@
           if (!top && c.PULLUP_TOP_ELBOW_ANGLE && a.arms.length) {
             top = a.arms.reduce((t, m) => t + m.angle, 0) / a.arms.length <= c.PULLUP_TOP_ELBOW_ANGLE;
           }
+          if (top && !(this.rep && this.rep.lifted)) top = false; // 身体没被拉上去（如坐着举手屈伸）不算
           if (top) {
             if (++this.topFrames >= c.PULLUP_TOP_FRAMES) this.topReached = true;
           } else this.topFrames = 0;
