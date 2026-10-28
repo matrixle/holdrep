@@ -18,12 +18,13 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .brand h1{margin:0;font-size:40px;letter-spacing:-1px}
 .brand p{margin:4px 0 0;color:var(--mute)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
-.mode{display:flex;gap:16px;align-items:center;width:100%;text-align:left;margin-bottom:12px;padding:22px 18px}
+.stack{display:flex;flex-direction:column;gap:12px}  /* 首页各区块统一 12px 间距 */
+.mode{display:flex;gap:16px;align-items:center;width:100%;text-align:left;padding:22px 18px}
 .mode .ico{font-size:34px;width:52px;height:52px;border-radius:14px;background:var(--acc);
   display:grid;place-items:center;flex:none}
 .mode b{display:block;font-size:20px}
 .mode small{display:block;color:var(--mute);margin-top:4px;font-size:13px;line-height:1.35}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .small{font-size:16px;font-weight:600;text-align:center;padding:18px 8px}
 .hint{color:var(--mute);font-size:13px;line-height:1.5;margin:16px 4px}
 
