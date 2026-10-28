@@ -272,17 +272,34 @@
     return `<details class="list"><summary style="padding:12px 14px;color:var(--mute);font-size:14px">调试数据（${tr.length} 行，用于调参）</summary>
       <pre class="trace">时间 左/右脚离地(unit) 肘角 手腕高 肩速 脚ok 姿势ok 计时\n${lines.join('\n')}</pre></details>`;
   }
+  /* ---------- 体重 / 热量估算 ---------- */
+  const getWeight = () => { try { return +localStorage.getItem('hr_weight') || 0; } catch (e) { return 0; } };
+  $('#weight').value = getWeight() || '';
+  $('#weight').onchange = () => {
+    const w = +$('#weight').value;
+    try { if (w >= 20 && w <= 250) localStorage.setItem('hr_weight', String(w)); else { localStorage.removeItem('hr_weight'); $('#weight').value = ''; } } catch (e) {}
+  };
+  // 活动能量（千卡），未填体重返回 0
+  function kcalOf(s) {
+    const w = getWeight(), r = s.result;
+    if (!w) return 0;
+    const [met, activeMs] = s.mode === 'hang' ? [C.KCAL_HANG_MET, r.totalMs] : [C.KCAL_PULLUP_MET, r.total * C.KCAL_PULLUP_REP_SEC * 1000];
+    const restMs = Math.max(0, s.durationMs - activeMs);
+    return Math.round(((met - 1) * activeMs + (C.KCAL_REST_MET - 1) * restMs) / 3600000 * w * 10) / 10;
+  }
+  const kcalStat = s => { const k = kcalOf(s); return stat('估算消耗', k ? k + ' 千卡' : '<small>首页填体重</small>'); };
+
   function detailHTML(s) {
     const r = s.result;
     let h = `<p class="hint" style="margin-top:0">${fmtDate(s.startedAt)} · 本轮用时 ${fmtLong(s.durationMs)}</p><div class="stats">`;
     if (s.mode === 'hang') {
       h += stat('总悬挂时长', fmt(r.totalMs), 'hl') + stat('悬挂段数', r.count) + stat('中断次数', r.interruptions) +
-        stat('平均单次', fmt(r.avgMs)) + stat('最长单次', fmt(r.maxMs)) + '</div>';
+        stat('平均单次', fmt(r.avgMs)) + stat('最长单次', fmt(r.maxMs)) + kcalStat(s) + '</div>';
       h += rows('每段悬挂（按时间顺序）', r.segments.map((x, i) => [`第 ${i + 1} 段 · +${fmt(x.offsetMs).replace(/\.\d$/, '')}`, fmt(x.ms)]));
       h += traceHTML(r.trace);
     } else {
       const best = r.groups.length ? Math.max(...r.groups) : 0;
-      h += stat('总次数', r.total, 'hl') + stat('组数', r.groups.length) + stat('最多一组', best) + '</div>';
+      h += stat('总次数', r.total, 'hl') + stat('组数', r.groups.length) + stat('最多一组', best) + kcalStat(s) + '</div>';
       h += rows('每组次数', r.groups.map((n, i) => [`第 ${i + 1} 组`, n + ' 次']));
     }
     return h;
@@ -290,14 +307,14 @@
   const btn = (label, cls, fn, dis) => { const b = document.createElement('button'); b.className = 'abtn ' + cls; b.textContent = label; b.disabled = !!dis; b.onclick = fn; return b; };
 
   // 写入苹果健康：网页无法直接访问 HealthKit，借助 iOS「快捷指令」记录一次体能训练（见 README）。
-  // 传 JSON：{"seconds": 本轮用时秒数, "start": "yyyy-MM-dd HH:mm:ss" 开始时间（本地时间）}
+  // 传 JSON：{"seconds": 本轮用时秒数, "start": "yyyy-MM-dd HH:mm:ss" 开始时间（本地时间）, "kcal": 估算活动能量}
   const ymdhms = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
   function healthBtn(s) {
     const b = btn(s.healthAt ? '✓ 已发送到健康（可再发一次）' : '❤︎ 写入苹果健康', '', async () => {
       const seconds = Math.max(1, Math.round(s.durationMs / 1000));
       s.healthAt = Date.now(); b.textContent = '✓ 已发送到健康（可再发一次）';
       if (s.id != null) DB.put(s).catch(console.error);
-      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(JSON.stringify({ seconds, start: ymdhms(s.startedAt) }));
+      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(JSON.stringify({ seconds, start: ymdhms(s.startedAt), kcal: kcalOf(s) }));
     });
     return b;
   }

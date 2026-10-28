@@ -35,5 +35,12 @@ window.HR_CONFIG = {
   PULLUP_TOP_FRAMES: 2,         // 连续多少帧下巴过杠才确认到顶
   PULLUP_LOST_PAUSE_MS: 2500,   // 人离开画面多久自动暂停
   PULLUP_OUT_OF_START_PAUSE_MS: 9000, // 离开起始位多久自动暂停（单次动作最长耗时）
-  GROUP_GAP_MS: 15000,          // 两次 rep 间隔超过此值，拆为新的一组
+  GROUP_GAP_MS: 15000,
+
+  // ---- 热量估算（写入苹果健康的「大卡」= 活动能量，需在首页填体重）----
+  // 大卡 = (MET − 1) × 体重kg × 小时；减 1 是扣掉静息代谢，与「健康」里「活动能量」口径一致
+  KCAL_HANG_MET: 3.5,           // Dead Hang 悬挂中（上肢等长发力）
+  KCAL_PULLUP_MET: 8.0,         // 引体向上发力中（徒手训练·剧烈，Compendium 02020）
+  KCAL_PULLUP_REP_SEC: 3,       // 每次引体按多少秒发力时间计
+  KCAL_REST_MET: 1.3,           // 组间休息 / 站立等待          // 两次 rep 间隔超过此值，拆为新的一组
 };
