@@ -289,18 +289,14 @@
   }
   const btn = (label, cls, fn, dis) => { const b = document.createElement('button'); b.className = 'abtn ' + cls; b.textContent = label; b.disabled = !!dis; b.onclick = fn; return b; };
 
-  // 写入苹果健康：网页无法直接访问 HealthKit，借助 iOS「快捷指令」记录一次体能训练（见 README）
-  const ymdhms = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+  // 写入苹果健康：网页无法直接访问 HealthKit，借助 iOS「快捷指令」记录一次体能训练（见 README）。
+  // 只传「分钟数」一个值，这样快捷指令只需一个操作；开始时间由快捷指令取当前时间。
   function healthBtn(s) {
     const b = btn(s.healthAt ? '✓ 已发送到健康（可再发一次）' : '❤︎ 写入苹果健康', '', async () => {
-      const r = s.result, data = {
-        kind: s.mode, start: ymdhms(s.startedAt), end: ymdhms(s.endedAt),
-        minutes: Math.max(0.1, Math.round(s.durationMs / 6000) / 10),
-        summary: MODE_NAME[s.mode] + ' ' + (s.mode === 'hang' ? fmt(r.totalMs) + ' / ' + r.count + ' 段' : r.total + ' 次 / ' + r.groups.length + ' 组'),
-      };
+      const minutes = Math.max(0.1, Math.round(s.durationMs / 6000) / 10);
       s.healthAt = Date.now(); b.textContent = '✓ 已发送到健康（可再发一次）';
       if (s.id != null) DB.put(s).catch(console.error);
-      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(JSON.stringify(data));
+      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(String(minutes));
     });
     return b;
   }
