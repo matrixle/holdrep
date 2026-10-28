@@ -289,6 +289,22 @@
   }
   const btn = (label, cls, fn, dis) => { const b = document.createElement('button'); b.className = 'abtn ' + cls; b.textContent = label; b.disabled = !!dis; b.onclick = fn; return b; };
 
+  // 写入苹果健康：网页无法直接访问 HealthKit，借助 iOS「快捷指令」记录一次体能训练（见 README）
+  const ymdhms = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+  function healthBtn(s) {
+    const b = btn(s.healthAt ? '✓ 已发送到健康（可再发一次）' : '❤︎ 写入苹果健康', '', async () => {
+      const r = s.result, data = {
+        kind: s.mode, start: ymdhms(s.startedAt), end: ymdhms(s.endedAt),
+        minutes: Math.max(0.1, Math.round(s.durationMs / 6000) / 10),
+        summary: MODE_NAME[s.mode] + ' ' + (s.mode === 'hang' ? fmt(r.totalMs) + ' / ' + r.count + ' 段' : r.total + ' 次 / ' + r.groups.length + ' 组'),
+      };
+      s.healthAt = Date.now(); b.textContent = '✓ 已发送到健康（可再发一次）';
+      if (s.id != null) DB.put(s).catch(console.error);
+      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(JSON.stringify(data));
+    });
+    return b;
+  }
+
   function showResult(s, o = {}) {
     $('#rTitle').textContent = MODE_NAME[s.mode] + (o.fresh ? ' · 本轮结果' : '');
     $('#rBody').innerHTML = o.empty ? '<p class="empty">本轮没有记录到有效数据，未保存。</p>' + (s.mode === 'hang' ? traceHTML(s.result.trace) : '') : detailHTML(s);
@@ -296,6 +312,7 @@
     if (o.fresh) {
       a.append(
         btn(o.saved ? '✓ 已保存到历史' : '本轮无数据，未保存', '', null, true),
+        ...(o.saved ? [healthBtn(s)] : []),
         btn('再来一组', 'pri', () => enterTrain(s.mode)),
         btn('返回首页', '', () => show('home')));
     } else {
@@ -304,7 +321,7 @@
         if (!armed) { armed = true; del.textContent = '再点一次确认删除'; return; }
         await DB.remove(s.id); openHistory();
       });
-      a.append(del, btn('返回列表', '', openHistory));
+      a.append(healthBtn(s), del, btn('返回列表', '', openHistory));
     }
     $('#v-result').scrollTop = 0;
     show('result');

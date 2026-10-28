@@ -7,6 +7,7 @@ window.HR_CONFIG = {
   MIN_KP_SCORE: 0.3,            // 关键点置信度下限
   MAX_FRAME_GAP_MS: 1200,       // 两帧间隔超过此值（切后台/卡死）视为中断
   SHOW_SKELETON: true,          // 是否在画面上绘制骨架辅助调试
+  HEALTH_SHORTCUT: 'HoldRep 写入健康', // 写入苹果健康所用的快捷指令名称（需在「快捷指令」App 中按 README 建好）
 
   // ---- Dead Hang ----
   HANG_ANGLE_ENTER: 155,        // 进入悬垂：肘角需 ≥ 此值（手臂伸直）

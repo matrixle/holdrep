@@ -27,6 +27,7 @@
   }
   g.HR_DB = {
     add: s => tx('readwrite', st => st.add(s)),
+    put: s => tx('readwrite', st => st.put(s)),
     remove: id => tx('readwrite', st => st.delete(id)),
     get: id => tx('readonly', st => st.get(id)),
     // 时间倒序
