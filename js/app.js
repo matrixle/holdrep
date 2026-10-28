@@ -309,14 +309,27 @@
   // 写入苹果健康：网页无法直接访问 HealthKit，借助 iOS「快捷指令」记录一次体能训练（见 README）。
   // 传 JSON：{"seconds": 本轮用时秒数, "start": "yyyy-MM-dd HH:mm:ss" 开始时间（本地时间）, "kcal": 估算活动能量}
   const ymdhms = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+  const SENT = '✓ 已发送到健康（可再发一次）';
+  function sendHealth(s) {
+    const seconds = Math.max(1, Math.round(s.durationMs / 1000));
+    s.healthAt = Date.now();
+    if (s.id != null) DB.put(s).catch(console.error);
+    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(JSON.stringify({ seconds, start: ymdhms(s.startedAt), kcal: kcalOf(s) }));
+  }
   function healthBtn(s) {
-    const b = btn(s.healthAt ? '✓ 已发送到健康（可再发一次）' : '❤︎ 写入苹果健康', '', async () => {
-      const seconds = Math.max(1, Math.round(s.durationMs / 1000));
-      s.healthAt = Date.now(); b.textContent = '✓ 已发送到健康（可再发一次）';
-      if (s.id != null) DB.put(s).catch(console.error);
-      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(JSON.stringify({ seconds, start: ymdhms(s.startedAt), kcal: kcalOf(s) }));
-    });
+    const b = btn(s.healthAt ? SENT : '❤︎ 写入苹果健康', '', () => { sendHealth(s); b.textContent = SENT; });
     return b;
+  }
+  // 训练刚结束：询问是否写入健康（跳转快捷指令必须由点击触发，所以用按钮而不是自动跳转）
+  function askHealth(s, hb) {
+    const k = kcalOf(s), card = document.createElement('div');
+    card.className = 'card'; card.style.marginBottom = '14px';
+    card.innerHTML = `<b>写入苹果健康？</b><small style="display:block;color:var(--mute);margin:4px 0 12px">记录一次功能性力量训练：${fmtLong(s.durationMs)}${k ? ' · ' + k + ' 千卡' : ''}</small>`;
+    const row = document.createElement('div'); row.className = 'row2';
+    const done = () => card.remove();
+    row.append(btn('写入', 'pri', () => { sendHealth(s); hb.textContent = SENT; done(); }), btn('暂不', '', done));
+    card.appendChild(row);
+    $('#rBody').prepend(card);
   }
 
   function showResult(s, o = {}) {
@@ -324,9 +337,11 @@
     $('#rBody').innerHTML = o.empty ? '<p class="empty">本轮没有记录到有效数据，未保存。</p>' + (s.mode === 'hang' ? traceHTML(s.result.trace) : '') : detailHTML(s);
     const a = $('#rActions'); a.innerHTML = '';
     if (o.fresh) {
+      const hb = healthBtn(s);
+      if (o.saved) askHealth(s, hb);
       a.append(
         btn(o.saved ? '✓ 已保存到历史' : '本轮无数据，未保存', '', null, true),
-        ...(o.saved ? [healthBtn(s)] : []),
+        ...(o.saved ? [hb] : []),
         btn('再来一组', 'pri', () => enterTrain(s.mode)),
         btn('返回首页', '', () => show('home')));
     } else {
