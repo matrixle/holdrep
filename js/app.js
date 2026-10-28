@@ -290,13 +290,14 @@
   const btn = (label, cls, fn, dis) => { const b = document.createElement('button'); b.className = 'abtn ' + cls; b.textContent = label; b.disabled = !!dis; b.onclick = fn; return b; };
 
   // 写入苹果健康：网页无法直接访问 HealthKit，借助 iOS「快捷指令」记录一次体能训练（见 README）。
-  // 只传「秒数」一个值（快捷指令里持续时间单位选「秒」），这样快捷指令只需一个操作；开始时间由快捷指令取当前时间。
+  // 传 JSON：{"seconds": 本轮用时秒数, "start": "yyyy-MM-dd HH:mm:ss" 开始时间（本地时间）}
+  const ymdhms = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
   function healthBtn(s) {
     const b = btn(s.healthAt ? '✓ 已发送到健康（可再发一次）' : '❤︎ 写入苹果健康', '', async () => {
       const seconds = Math.max(1, Math.round(s.durationMs / 1000));
       s.healthAt = Date.now(); b.textContent = '✓ 已发送到健康（可再发一次）';
       if (s.id != null) DB.put(s).catch(console.error);
-      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(String(seconds));
+      location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(C.HEALTH_SHORTCUT) + '&input=text&text=' + encodeURIComponent(JSON.stringify({ seconds, start: ymdhms(s.startedAt) }));
     });
     return b;
   }
