@@ -1,12 +1,12 @@
 # Hold Rep — 单杠自动计时 / 计数 PWA
 
-纯 HTML/CSS/原生 JS，无构建、无 npm。TensorFlow.js 与 MoveNet Lightning 模型已放在 `vendor/`，首次加载后完全离线可用。
+纯 HTML/CSS/原生 JS，无构建、无 npm。姿态识别使用 MediaPipe BlazePose（模型与 wasm 已放在 `vendor/`），首次加载后完全离线可用。
 
 ## 目录
 - `index.html` `css/app.css` `js/{config,detectors,db,app}.js` — 应用
 - `js/config.js` — **所有识别阈值集中在这里**
 - `manifest.webmanifest` `sw.js` `icons/` — PWA
-- `vendor/` — tf.min.js、pose-detection、MoveNet 模型（本地）
+- `vendor/mediapipe/` — MediaPipe Tasks Vision 脚本、wasm、BlazePose Full 模型（本地，约 22MB）
 - `serve.py` — 本地静态服务器
 
 ## ⚠️ 重要：必须是 HTTPS
@@ -32,8 +32,8 @@ python3 serve.py 192.168.x.x.pem 192.168.x.x-key.pem
 
 > 从主屏幕启动的 PWA 摄像头权限可能需要再允许一次，属 iOS 正常行为。
 
-## 识别模型（可切换对比）
-首页「识别模型」选择 Lightning / Thunder / BlazePose；训练页顶部左侧的小标签显示当前模型与单次推理耗时，**开始前点它可循环切换**，方便在同一机位下对比。BlazePose 额外提供脚跟/脚尖点，脚离地判断更稳。选择会被记住。模型文件都在 `vendor/` 内，首次安装约 7MB（含默认的 Lightning）；Thunder、BlazePose 约 50MB，首次选用时才下载并缓存，之后离线可用。国内访问 github.io 可能较慢，请在 Wi-Fi 下耐心等待首次下载。
+## 识别模型
+使用 MediaPipe BlazePose Full（GPU 推理）。曾对比 MoveNet Lightning / Thunder，实测 BlazePose 在 Dead Hang 上最准，已移除其他模型。训练页右上角小标签显示模型、离地高度 ↑ 与单次推理耗时。模型约 22MB，首次进入训练页时下载并缓存到独立缓存中，之后离线可用，**更新 App 版本不会重新下载**。国内访问 github.io 可能较慢，请在 Wi-Fi 下耐心等待首次下载。
 
 ## 大字显示
 类似 iOS 秒表：居中的超大细体数字（`mm:ss.cc`，毫秒位在两次识别之间插值，走得顺滑），画面压暗以便远距离看清。首页「数字显示」或训练页右上角「Aa」可切换，默认开启，选择会被记住。
@@ -41,7 +41,7 @@ python3 serve.py 192.168.x.x.pem 192.168.x.x-key.pem
 ## 使用
 手机竖屏立在前方，前置摄像头拍到上半身和单杠，屏幕上橙色虚线为估计的单杠高度（需先在起始位悬垂一下）。
 - **Dead Hang**：手臂伸直、手腕高于肩、**双脚离地**、身体基本静止 → 自动计时；
-  脚是否离地靠「地面校准」判断：进入训练页后先**双脚着地、双手放下站一下**（画面里需拍到脚踝或膝盖），之后脚踝比站立位置高出 `HANG_FEET_LIFT` 才算离地。顶部提示条会告诉你当前状态。相机位置变动后，重新放下手站一下即可自动更新。不需要时可把 `HANG_REQUIRE_FEET_OFF_GROUND` 设为 false。
+  脚是否离地靠「地面校准」判断：进入训练页后先**双脚着地、双手放下站一下**（画面里需拍到脚踝或膝盖），之后**两只**脚踝都比各自站立位置高出 `HANG_FEET_LIFT`（默认 0.28 肩宽）才算离地，可区分「握杠踮脚」与「真正离地」。顶部提示条会告诉你当前状态。相机位置变动后，重新放下手站一下即可自动更新。不需要时可把 `HANG_REQUIRE_FEET_OFF_GROUND` 设为 false。
   姿势丢失 0.7s 以上自动暂停，回到悬垂接续。
 - **引体**：手臂基本伸直（起始位）→ 拉起到「下巴接近杠」或「手臂明显弯曲」→ 回到基本伸直 = 1 次（判定已放宽）。离开画面 2.5s / 离开起始位 9s 自动暂停，次数保留。两次间隔 >15s 自动分组。
 - 结束本轮时会自动保存到历史（结果页「保存到历史」显示为已保存）；历史里可查看明细并删除（二次确认）。

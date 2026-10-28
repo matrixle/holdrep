@@ -37,11 +37,6 @@
     } catch (e) {}
   }
 
-  const MODEL_KEY = 'hr_model';
-  const getModelId = () => { try { return localStorage.getItem(MODEL_KEY) || 'lightning'; } catch (e) { return 'lightning'; } };
-  const setModelId = id => { try { localStorage.setItem(MODEL_KEY, id); } catch (e) {} };
-  const modelLabel = id => (HR_MODELS.list.find(m => m.id === id) || HR_MODELS.list[0]).label;
-
   async function startCamera() {
     stopCamera();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -73,7 +68,7 @@
   }
 
   async function enterTrain(mode) {
-    Object.assign(T, { mode, phase: 'idle', pose: null, on: false, mdl: getModelId(), ms: 0 });
+    Object.assign(T, { mode, phase: 'idle', pose: null, on: false, ms: 0 });
     T.det = mode === 'hang' ? new D.HangDetector() : new D.PullupDetector(beep);
     show('train'); applyBig();
     $('#hudHang').style.display = mode === 'hang' ? '' : 'none';
@@ -84,10 +79,9 @@
     updateButtons(); initMsg(); render();
     try {
       // getUserMedia 紧跟点击手势发起，满足 iOS 权限弹窗要求
-      T.mdl = getModelId();
       const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + '超时' + (what === '模型加载' ? '（卡在：' + (HR_MODELS.stage || '未开始') + '）' : ''))), ms))]);
       const camP = withTimeout(startCamera().then(r => { T.init.cam = true; return r; }), 20000, '摄像头启动');
-      const [, model] = await Promise.all([camP, withTimeout(HR_MODELS.load(T.mdl).then(r => { T.init.mdl = true; return r; }), 300000, '模型加载')]);
+      const [, model] = await Promise.all([camP, withTimeout(HR_MODELS.load().then(r => { T.init.mdl = true; return r; }), 300000, '模型加载')]);
       T.model = model; T.ms = 0; updatePerf();
       clearInterval(T.initTimer); T.init = null;
       if (!$('#v-train').classList.contains('on')) { stopCamera(); return; }
@@ -129,19 +123,8 @@
     }).catch(console.error).finally(() => { T.busy = false; });
   }
 
-  /* ---------- 模型选择（首页）/ 训练页切换 ---------- */
-  function updatePerf() { $('#perf').textContent = `${modelLabel(T.mdl)}${T.mode === 'hang' && T.det && T.det.lift != null ? ' ↑' + T.det.lift.toFixed(2) : ''}${HR_MODELS.backend && T.mdl !== 'blaze' ? '/' + HR_MODELS.backend : ''}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}${T.phase === 'idle' ? ' ⟳' : ''}`; }
-  $('#perf').onclick = async () => { // 训练开始前，点一下循环切换模型，便于对比
-    if (T.phase !== 'idle' || !T.on || T.switching) return;
-    const L = HR_MODELS.list, next = L[(L.findIndex(m => m.id === T.mdl) + 1) % L.length].id;
-    T.switching = true; $('#perf').textContent = '加载 ' + modelLabel(next) + '…';
-    try { T.model = await HR_MODELS.load(next); T.mdl = next; setModelId(next); T.ms = 0; syncModelSeg(); }
-    catch (e) { console.error(e); $('#perf').textContent = modelLabel(next) + ' 加载失败'; await new Promise(r => setTimeout(r, 1500)); }
-    T.switching = false; updatePerf();
-  };
-  function syncModelSeg() { $$('#segModel button').forEach(b => b.classList.toggle('on', b.dataset.v === getModelId())); }
-  $$('#segModel button').forEach(b => b.onclick = () => { setModelId(b.dataset.v); syncModelSeg(); });
-  syncModelSeg();
+  /* ---------- 训练页顶部标签：模型 / 离地高度 / 推理耗时 ---------- */
+  function updatePerf() { $('#perf').textContent = `${HR_MODELS.label}${T.mode === 'hang' && T.det && T.det.lift != null ? ' ↑' + T.det.lift.toFixed(2) : ''}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}`; }
 
   /* ---------- 训练页渲染 ---------- */
   const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
@@ -150,7 +133,7 @@
     return `${SPIN[i.tick % 10]} 摄像头${i.cam ? '✓' : '…'} 模型${i.mdl ? '✓' : '… ' + (HR_MODELS.stage || '')} ${secs}s`;
   }
   function initMsg() {
-    setMsg(`正在初始化<br><b>${initText()}</b><br><small style="color:#9aa4b2">如弹出摄像头权限提示请选「允许」。<br>转圈和秒数在变化 = 正在加载；停止变化 = 页面卡死。<br>首次使用某个模型需要下载，网络慢时可能要几十秒，之后会缓存</small>`);
+    setMsg(`正在初始化<br><b>${initText()}</b><br><small style="color:#9aa4b2">如弹出摄像头权限提示请选「允许」。<br>转圈和秒数在变化 = 正在加载；停止变化 = 页面卡死。<br>首次使用需要下载约 22MB 模型，网络慢时可能要几十秒，之后会缓存（更新版本不会重新下载）</small>`);
   }
   function pillState() {
     if (T.init) return ['warn', '准备中 ' + initText()];
@@ -222,12 +205,12 @@
     const good = T.phase === 'running' && (T.det.active || T.det.status === 'ready' || T.det.status === 'pulling');
     g.lineWidth = 4; g.lineCap = 'round';
     g.strokeStyle = good ? 'rgba(46,230,107,.85)' : 'rgba(255,255,255,.55)';
-    [[5, 6], [5, 7], [7, 9], [6, 8], [8, 10], [5, 11], [6, 12], [11, 12]].forEach(([a, b]) => {
+    [[5, 6], [5, 7], [7, 9], [6, 8], [8, 10], [5, 11], [6, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16]].forEach(([a, b]) => {
       if (!ok(a) || !ok(b)) return;
       const A = P(kps[a]), B = P(kps[b]); g.beginPath(); g.moveTo(A.x, A.y); g.lineTo(B.x, B.y); g.stroke();
     });
     g.fillStyle = '#ff6a1a';
-    [0, 9, 10].forEach(i => { if (!ok(i)) return; const A = P(kps[i]); g.beginPath(); g.arc(A.x, A.y, 6, 0, 7); g.fill(); });
+    [0, 9, 10, 15, 16].forEach(i => { if (!ok(i)) return; const A = P(kps[i]); g.beginPath(); g.arc(A.x, A.y, 6, 0, 7); g.fill(); });
     if (T.mode === 'pullup' && T.det.barY != null) { // 估计的单杠高度
       const y = oy + T.det.barY * s;
       g.setLineDash([10, 8]); g.strokeStyle = 'rgba(255,106,26,.9)'; g.lineWidth = 2;

@@ -1,5 +1,5 @@
-/* 动作识别：把 MoveNet 关键点转成「悬垂计时」与「引体计数」状态机。
- * MoveNet 关键点序号：0 鼻 5/6 左右肩 7/8 左右肘 9/10 左右腕 11/12 左右髋。
+/* 动作识别：把姿态关键点（COCO-17 顺序）转成「悬垂计时」与「引体计数」状态机。
+ * 关键点序号：0 鼻 5/6 左右肩 7/8 左右肘 9/10 左右腕 11/12 左右髋。
  * 图像坐标系 y 向下，所以「更高」= y 更小。 */
 (function (g) {
   'use strict';
@@ -40,11 +40,12 @@
       if (ang == null) return;
       arms.push({ angle: ang, wristUp: (s.y - w.y) / unit, wrist: w });
     });
-    // 脚/膝的高度：每侧各取最低点（踝/脚跟/脚尖）。左右分开，各自与自己的地面基线比较，
+    // 脚踝/膝盖的高度，左右分开，各自与自己的地面基线比较，
     // 这样站立时双脚前后位置不同、或只抬一只脚，都不会被误判为离地。
-    const low = ids => { const q = ids.map(i => kp(k, i)).filter(Boolean); return q.length ? Math.max(...q.map(x => x.y)) : null; };
+    // 只用脚踝、不用脚尖：悬垂时脚尖自然下垂，抬高量偏小；且 BlazePose 在拖鞋上的脚尖/脚跟点不稳。
+    const y = i => { const p = kp(k, i); return p ? p.y : null; };
     return { shoMid, unit, arms, nose: kp(k, 0),
-      ankle: [low([15, 17, 19]), low([16, 18, 20])], knee: [low([13]), low([14])],
+      ankle: [y(15), y(16)], knee: [y(13), y(14)],
       armsDown: arms.length >= 1 && arms.every(m => m.wristUp < 0) }; // 双手垂在身侧 = 站在地面
   }
 
