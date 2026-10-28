@@ -74,6 +74,10 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .list h3{margin:0;padding:12px 14px;font-size:14px;color:var(--mute);border-bottom:1px solid var(--line)}
 .li{display:flex;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);
   font-variant-numeric:tabular-nums}
+.ana{display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}.ana:last-child{border:0}
+.ana i{font-style:normal;flex:none;width:22px;text-align:center;font-weight:700}
+.ana b{display:block;font-size:15px}.ana small{display:block;color:var(--mute);font-size:13px;line-height:1.45;margin-top:3px}
+.ana.ok i{color:var(--ok)}.ana.tip i{color:var(--warn)}.ana.warn i{color:var(--bad)}.ana.info i{color:var(--acc)}
 .li:last-child{border:0}.li span:first-child{color:var(--mute)}
 .actions{display:grid;gap:10px;margin-top:6px}
 .abtn{height:54px;border-radius:16px;font-size:18px;font-weight:700;background:var(--card);border:1px solid var(--line)}

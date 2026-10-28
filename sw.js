@@ -7,7 +7,7 @@ const VENDOR = 'hrvendor-mediapipe-1';
 // 核心资源：安装时一次性缓存
 const CORE = [
   './', 'index.html', 'manifest.webmanifest',
-  'css/app.css', 'js/version.js', 'js/config.js', 'js/detectors.js', 'js/db.js', 'js/models.js', 'js/app.js',
+  'css/app.css', 'js/version.js', 'js/config.js', 'js/detectors.js', 'js/report.js', 'js/db.js', 'js/models.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
 ];
 // BlazePose 模型不在安装时下载，避免与首次加载抢带宽；首次进入训练页时由下面的 fetch 逻辑自动缓存，之后离线可用。

@@ -289,17 +289,29 @@
   }
   const kcalStat = s => { const k = kcalOf(s); return stat('估算消耗', k ? k + ' 千卡' : '<small>首页填体重</small>'); };
 
+  // 动作分析报告（见 report.js）
+  function reportHTML(s) {
+    const items = HR_REPORT.build(s);
+    if (items == null) return '<div class="list"><h3>动作分析</h3><div class="ana info"><i>i</i><div><small>这条记录来自旧版本，没有动作分析数据。</small></div></div></div>';
+    if (!items.length) return '';
+    const ICON = { ok: '✓', tip: '!', warn: '✕', info: '→' };
+    return `<div class="list"><h3>动作分析</h3>${items.map(x => `<div class="ana ${x.lv}"><i>${ICON[x.lv]}</i><div><b>${x.t}</b><small>${x.d}</small></div></div>`).join('')}
+      <div class="ana"><div><small>基于前置摄像头的 2D 画面估算，看不到前后方向的摆动，仅供参考。</small></div></div></div>`;
+  }
+
   function detailHTML(s) {
     const r = s.result;
     let h = `<p class="hint" style="margin-top:0">${fmtDate(s.startedAt)} · 本轮用时 ${fmtLong(s.durationMs)}</p><div class="stats">`;
     if (s.mode === 'hang') {
       h += stat('总悬挂时长', fmt(r.totalMs), 'hl') + stat('悬挂段数', r.count) + stat('中断次数', r.interruptions) +
         stat('平均单次', fmt(r.avgMs)) + stat('最长单次', fmt(r.maxMs)) + kcalStat(s) + '</div>';
+      h += reportHTML(s);
       h += rows('每段悬挂（按时间顺序）', r.segments.map((x, i) => [`第 ${i + 1} 段 · +${fmt(x.offsetMs).replace(/\.\d$/, '')}`, fmt(x.ms)]));
       h += traceHTML(r.trace);
     } else {
       const best = r.groups.length ? Math.max(...r.groups) : 0;
       h += stat('总次数', r.total, 'hl') + stat('组数', r.groups.length) + stat('最多一组', best) + kcalStat(s) + '</div>';
+      h += reportHTML(s);
       h += rows('每组次数', r.groups.map((n, i) => [`第 ${i + 1} 组`, n + ' 次']));
     }
     return h;
