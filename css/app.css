@@ -74,10 +74,20 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .list h3{margin:0;padding:12px 14px;font-size:14px;color:var(--mute);border-bottom:1px solid var(--line)}
 .li{display:flex;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);
   font-variant-numeric:tabular-nums}
-.ana{display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}.ana:last-child{border:0}
-.ana i{font-style:normal;flex:none;width:22px;text-align:center;font-weight:700}
-.ana b{display:block;font-size:15px}.ana small{display:block;color:var(--mute);font-size:13px;line-height:1.45;margin-top:3px}
-.ana.ok i{color:var(--ok)}.ana.tip i{color:var(--warn)}.ana.warn i{color:var(--bad)}.ana.info i{color:var(--acc)}
+.ana{padding:12px 14px;border-bottom:1px solid var(--line)}.ana:last-child{border:0}
+.ana b{display:block;font-size:15px}.ana b em{font-style:normal;font-weight:600;color:var(--mute);font-size:13px;margin-left:8px}
+.ana small{display:block;color:var(--mute);font-size:13px;line-height:1.5;margin-top:4px}
+.ana p{margin:6px 0 0;font-size:14px;line-height:1.5}.ana.good p,.ana:not(.main) p{margin:4px 0}
+.ana .cue{color:var(--ok)}.ana .drill{color:var(--warn)}
+.ana.main{background:rgba(255,106,26,.08)}.ana.main b{color:var(--acc);font-size:17px}
+.rep-head{display:flex;gap:14px;align-items:center;padding:14px;border-bottom:1px solid var(--line);font-size:15px;line-height:1.45}
+.rep-head small{display:block;color:var(--mute);font-size:13px;margin-top:4px}
+.rep-score{flex:none;width:72px;height:72px;border-radius:50%;border:3px solid var(--acc);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.rep-score b{font-size:26px;line-height:1}.rep-score small{margin:2px 0 0;font-size:12px}
+.rep-sec{padding:10px 14px 0;font-size:12px;color:var(--mute);letter-spacing:.05em}
+.rep-tbl{overflow-x:auto;padding:6px 8px 10px;border-bottom:1px solid var(--line)}
+.rep-tbl table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rep-tbl th{color:var(--mute);font-weight:600;text-align:left;padding:4px 6px}.rep-tbl td{padding:5px 6px;border-top:1px solid var(--line)}
 .li:last-child{border:0}.li span:first-child{color:var(--mute)}
 .actions{display:grid;gap:10px;margin-top:6px}
 .abtn{height:54px;border-radius:16px;font-size:18px;font-weight:700;background:var(--card);border:1px solid var(--line)}

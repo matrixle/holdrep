@@ -43,17 +43,47 @@
       angLR[side] = ang;
       arms.push({ angle: ang, wristUp: (s.y - w.y) / unit, wrist: w });
     });
-    // 动作分析用：膝-髋的竖直距离（抬腿/蹬腿时变小）、鼻-肩距离（耸肩时变小）、左右肩高差（>0 = 左肩低）
+    // ---- 动作分析用特征（长度 / unit，≈ 肩宽）----
     const lK = kp(k, 13), rK = kp(k, 14), knees = [lK, rK].filter(Boolean), nose = kp(k, 0);
-    const legY = hipMid && knees.length ? (knees.reduce((s, q) => s + q.y, 0) / knees.length - hipMid.y) / unit : null;
+    const legY = hipMid && knees.length ? (knees.reduce((s, q) => s + q.y, 0) / knees.length - hipMid.y) / unit : null; // 膝-髋竖直距离，抬腿时变小
+    const ears = [[lS, kp(k, 3)], [rS, kp(k, 4)]].filter(x => x[1]);
+    const earSho = ears.length ? ears.reduce((s, [sh, e]) => s + sh.y - e.y, 0) / ears.length / unit : null; // 耳-肩距离，耸肩时变小
+    const earY = ears.length ? ears.reduce((s, x) => s + x[1].y, 0) / ears.length : null;
+    const sw = Math.hypot(lS.x - rS.x, lS.y - rS.y), lW = kp(k, 9), rW = kp(k, 10);
     // 脚踝/膝盖的高度，左右分开，各自与自己的地面基线比较，
     // 这样站立时双脚前后位置不同、或只抬一只脚，都不会被误判为离地。
     // 只用脚踝、不用脚尖：悬垂时脚尖自然下垂，抬高量偏小；且 BlazePose 在拖鞋上的脚尖/脚跟点不稳。
     const y = i => { const p = kp(k, i); return p ? p.y : null; };
-    return { shoMid, unit, arms, nose, hipMid, angLR, legY,
-      tilt: (lS.y - rS.y) / unit, neck: nose ? (shoMid.y - nose.y) / unit : null,
+    return { shoMid, unit, arms, nose, hipMid, angLR, legY, earSho,
+      head: earY != null && nose ? (earY - nose.y) / unit : null,    // 鼻子高出耳朵多少：仰头 / 伸脖子够杠时变大
+      grip: lW && rW ? Math.abs(lW.x - rW.x) / sw : null,             // 握距 / 肩宽
+      tilt: (lS.y - rS.y) / unit,                                      // >0 = 左肩低
+      w3: pose.world ? world3(pose.world, k, sw) : null,
       ankle: [y(15), y(16)], knee: [y(13), y(14)],
       armsDown: arms.length >= 1 && arms.every(m => m.wristUp < 0) }; // 双手垂在身侧 = 站在地面
+  }
+
+  // 3D 世界坐标特征（米，原点髋部，y 向下，z 越小越近镜头）。手机仰拍会让绝对角度有偏差，所以分析时只看相对自身起始姿态的变化。
+  const sub3 = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+  const mid3 = (a, b) => a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 } : null;
+  const len3 = v => Math.hypot(v.x, v.y, v.z);
+  function ang3(a, b, c) {
+    const u = sub3(a, b), v = sub3(c, b), d = len3(u) * len3(v);
+    return d ? Math.acos(Math.max(-1, Math.min(1, (u.x * v.x + u.y * v.y + u.z * v.z) / d))) * 180 / Math.PI : null;
+  }
+  function world3(W, k, sw) {
+    const v = i => W[i] && kp(k, i) ? W[i] : null; // 2D 可见的点才用
+    const S = mid3(v(5), v(6)), H = mid3(v(11), v(12)), K = mid3(v(13), v(14)), A = mid3(v(15), v(16)), o = {};
+    if (S) { const d = len3(sub3(W[5], W[6])); if (d > 0.05) { o.mpp = d / sw; o.rot = (W[5].z - W[6].z) / d; } } // 米/像素；躯干扭转
+    if (S && H) o.lean = Math.atan2(S.z - H.z, H.y - S.y) * 180 / Math.PI;  // 躯干前后倾角
+    if (S && H && K) o.hip = ang3(S, H, K);                                  // 髋角：抬腿 / 收腹时变小
+    if (H && K && A) o.knee = ang3(H, K, A);                                 // 膝角
+    if (H && A) o.ankZ = A.z - H.z;                                          // 脚相对髋的前后位置（米）
+    // 掌心朝向：手腕→食指根 × 手腕→小指根 的法向 z；左右手符号相反，相减得到同一判据（正握 / 反握）
+    const pz = (wi, pi, ii) => { const w = v(wi), p = v(pi), i = v(ii); if (!w || !p || !i) return null; const a = sub3(i, w), b = sub3(p, w); return (a.x * b.y - a.y * b.x) * 1e4; };
+    const L = pz(9, 17, 19), R = pz(10, 18, 20);
+    if (L != null && R != null) o.palm = L - R;
+    return o;
   }
 
   function makeDt(self, t, onGap) {
@@ -86,23 +116,29 @@
       this.lift = null;             // 当前「较低那只脚」的离地高度（unit），仅供调试显示
       this.st = null;               // 当前段的动作统计（动作分析报告用）
     }
-    // 悬垂中逐帧累计：肘角、摆动、左右对称、耸肩（段首/段尾的鼻-肩距离）
+    // 悬垂中逐帧累计（动作分析用）：肘角、晃动、左右对称、耸肩、躯干/腿部前后摆动、握距握法
     _stat(a) {
-      const s = this.st || (this.st = { n: 0, ang: 0, minAng: 180, spd: 0, maxSpd: 0, tilt: 0, diff: 0, dn: 0, hx: 0, hx2: 0, hn: 0, neck0: [], neck1: [] });
-      const ang = Math.min(...a.arms.map(m => m.angle));
-      s.n++; s.ang += ang; s.minAng = Math.min(s.minAng, ang);
-      s.spd += this.speed; s.maxSpd = Math.max(s.maxSpd, this.speed); s.tilt += a.tilt;
-      if (a.angLR[0] != null && a.angLR[1] != null) { s.diff += a.angLR[0] - a.angLR[1]; s.dn++; }
-      if (a.hipMid) { const x = a.hipMid.x / a.unit; s.hx += x; s.hx2 += x * x; s.hn++; }
-      if (a.neck != null) { if (s.neck0.length < 10) s.neck0.push(a.neck); s.neck1.push(a.neck); if (s.neck1.length > 10) s.neck1.shift(); }
+      const s = this.st || (this.st = { ang: [], spd: [], tilt: [], diff: [], hx: [], ear: [], head: [], grip: [], palm: [], rot: [], lean: [], hip: [], ankZ: [] });
+      const push = (key, v) => { if (v != null && isFinite(v)) s[key].push(v); };
+      push('ang', Math.min(...a.arms.map(m => m.angle))); push('spd', this.speed); push('tilt', a.tilt);
+      if (a.angLR[0] != null && a.angLR[1] != null) push('diff', a.angLR[0] - a.angLR[1]);
+      if (a.hipMid) push('hx', a.hipMid.x / a.unit);
+      push('ear', a.earSho); push('head', a.head); push('grip', a.grip);
+      if (a.w3) { push('palm', a.w3.palm); push('rot', a.w3.rot); push('lean', a.w3.lean); push('hip', a.w3.hip); push('ankZ', a.w3.ankZ); }
     }
     _stSummary() {
-      const s = this.st; if (!s || !s.n) return null;
-      const r2 = x => Math.round(x * 100) / 100, avg = q => q.reduce((a, b) => a + b, 0) / q.length;
-      return { n: s.n, ang: Math.round(s.ang / s.n), minAng: Math.round(s.minAng), spd: r2(s.spd / s.n), maxSpd: r2(s.maxSpd),
-        tilt: r2(s.tilt / s.n), diff: s.dn ? Math.round(s.diff / s.dn) : null,
-        sway: s.hn > 1 ? r2(Math.sqrt(Math.max(0, s.hx2 / s.hn - (s.hx / s.hn) ** 2))) : null,
-        shrug: s.neck0.length >= 5 && s.neck1.length >= 5 ? r2(avg(s.neck0) - avg(s.neck1)) : null };
+      const s = this.st; if (!s || !s.ang.length) return null;
+      const r2 = x => x == null ? null : Math.round(x * 100) / 100, r0 = x => x == null ? null : Math.round(x);
+      const avg = q => q.length ? q.reduce((a, b) => a + b, 0) / q.length : null;
+      const sd = q => { if (q.length < 3) return null; const m = avg(q); return Math.sqrt(avg(q.map(x => (x - m) ** 2))); };
+      const head = (q, n) => avg(q.slice(0, n)), tail = (q, n) => avg(q.slice(-n));
+      const n = s.ang.length, qn = Math.max(5, Math.floor(n / 4));
+      return { n, ang: r0(avg(s.ang)), minAng: r0(Math.min(...s.ang)), spd: r2(avg(s.spd)),
+        tremor: n >= 40 ? r2(tail(s.spd, qn) / Math.max(0.02, head(s.spd, qn))) : null,      // 后 1/4 晃动 ÷ 前 1/4
+        tilt: r2(avg(s.tilt)), diff: r0(avg(s.diff)), sway: r2(sd(s.hx)),
+        shrug: s.ear.length >= 20 ? r2(head(s.ear, 10) - tail(s.ear, 10)) : null,           // >0 = 后段肩膀向耳朵靠拢
+        head: r2(avg(s.head)), grip: r2(avg(s.grip)), palm: r0(avg(s.palm)), rot: r2(avg(s.rot)),
+        leanSd: r0(sd(s.lean)), hip: r0(avg(s.hip)), ankZSd: r2(sd(s.ankZ)) };
     }
     _learn(a) {
       if (!a || !a.armsDown) return;
@@ -236,33 +272,58 @@
       this.partials = 0;       // 离开起始位、未到顶就回来的次数（半程/失败）
       this.rep = null; this.botAng = null; this.startT = 0;
       this.done = null;        // 刚完成、等待确定「下放结束时刻」的 rep
+      this.base = null;        // 起始位（底部悬垂）时的姿态基准，用于判断每次动作中的变化
+      this.gripAcc = { grip: [], palm: [] };
     }
-    // 一次 rep 进行中逐帧记录：最小肘角(到顶时刻)、下巴相对杠高、髋部横向摆动、抬腿、左右差
+    // 起始位逐帧更新姿态基准：ang = 本次底部最大肘角；其余特征只在手臂接近最伸直时更新（EMA），避免混入开始发力的帧
+    _base(a, ang) {
+      const f = { shoY: a.shoMid.y, ear: a.earSho, head: a.head, lean: a.w3 && a.w3.lean, hip: a.w3 && a.w3.hip, knee: a.w3 && a.w3.knee, ankZ: a.w3 && a.w3.ankZ, legY: a.legY };
+      if (!this.base || this.startFrames === 1) this.base = Object.assign({ ang }, f);
+      else {
+        this.base.ang = Math.max(this.base.ang, ang);
+        if (ang >= this.base.ang - 5) for (const key in f) if (f[key] != null) this.base[key] = this.base[key] == null ? f[key] : this.base[key] * 0.7 + f[key] * 0.3;
+      }
+      if (a.grip != null && this.gripAcc.grip.length < 600) this.gripAcc.grip.push(a.grip);
+      if (a.w3 && a.w3.palm != null && this.gripAcc.palm.length < 600) this.gripAcc.palm.push(a.w3.palm);
+    }
+    // 一次 rep 进行中逐帧记录（结束时汇总，见 _flushRep）
     _track(a, t) {
       if (!a.arms.length) return;
       const c = cfg(), ang = a.arms.reduce((s, m) => s + m.angle, 0) / a.arms.length;
-      const r = this.rep || (this.rep = { t0: t, bot: this.botAng, minAng: 180, tTop: t, chin: null, hx: null, legBase: a.legY, legMin: a.legY, tilt: 0, diff: null });
-      if (ang < r.minAng) {
-        r.minAng = ang; r.tTop = t;
-        if (a.angLR[0] != null && a.angLR[1] != null) r.diff = a.angLR[0] - a.angLR[1];
-      }
-      if (this.barY != null && a.nose) {
-        const chin = (a.nose.y + c.PULLUP_CHIN_OFFSET * a.unit - this.barY) / a.unit; // <0 = 下巴高于杠
-        r.chin = r.chin == null ? chin : Math.min(r.chin, chin);
-      }
-      if (a.hipMid) { const x = a.hipMid.x / a.unit; r.hx = r.hx ? [Math.min(r.hx[0], x), Math.max(r.hx[1], x)] : [x, x]; }
-      if (a.legY != null) { if (r.legBase == null) r.legBase = a.legY; r.legMin = r.legMin == null ? a.legY : Math.min(r.legMin, a.legY); }
-      r.tilt = Math.max(r.tilt, Math.abs(a.tilt));
+      const r = this.rep || (this.rep = { t0: t, base: Object.assign({}, this.base), minAng: 180, f: [] });
+      if (ang < r.minAng) r.minAng = ang;
+      const w = a.w3 || {};
+      r.f.push({ t, ang, shoY: a.shoMid.y, mpp: w.mpp, ear: a.earSho, head: a.head,
+        chin: this.barY != null && a.nose ? (a.nose.y + c.PULLUP_CHIN_OFFSET * a.unit - this.barY) / a.unit : null, // <0 = 下巴高于杠
+        hx: a.hipMid ? a.hipMid.x / a.unit : null, legY: a.legY, lean: w.lean, hip: w.hip, knee: w.knee, ankZ: w.ankZ,
+        tilt: a.tilt, diff: a.angLR[0] != null && a.angLR[1] != null ? a.angLR[0] - a.angLR[1] : null, rot: w.rot });
     }
-    // 下放结束 = 回到起始位后手臂真正伸直（≥ AN_PU_FULL_EXT）的时刻；没伸直就用回到起始位的时刻
+    // rep 汇总。阶段划分：起始 → 进入顶部区（肘角 ≤ 最小肘角+10°）= 拉起；顶部区停留 = 顶停；离开顶部区 → 手臂伸直 = 下放
     _flushRep() {
       if (!this.done) return;
-      const r = this.done, tEnd = r.tEnd != null ? r.tEnd : r.tStart, r2 = x => x == null ? null : Math.round(x * 100) / 100;
-      this.repStats.push({ up: Math.round(r.tTop - r.t0), down: Math.round(tEnd - r.tTop),
-        bot: r.bot == null ? null : Math.round(r.bot), top: Math.round(r.minAng), chin: r2(r.chin),
-        sway: r.hx ? r2(r.hx[1] - r.hx[0]) : null, leg: r.legBase != null && r.legMin != null ? r2(r.legBase - r.legMin) : null,
-        tilt: r2(r.tilt), diff: r.diff == null ? null : Math.round(r.diff) });
-      this.done = null;
+      const r = this.done, b = r.base || {}, F = r.f; this.done = null;
+      if (!F.length) return;
+      const tEnd = r.tEnd != null ? r.tEnd : r.tStart, zone = r.minAng + 10;
+      const iA = F.findIndex(x => x.ang <= zone), iB = F.length - 1 - [...F].reverse().findIndex(x => x.ang <= zone);
+      const A = F[iA], B = F[iB], top = F.reduce((m, x) => x.ang < m.ang ? x : m, F[0]);
+      const vals = k => F.map(x => x[k]).filter(v => v != null && isFinite(v));
+      const mn = k => { const q = vals(k); return q.length ? Math.min(...q) : null; }, mx = k => { const q = vals(k); return q.length ? Math.max(...q) : null; };
+      const avg = q => q.length ? q.reduce((s, v) => s + v, 0) / q.length : null;
+      const nearTop = F.slice(iA, iB + 1), topAvg = k => avg(nearTop.map(x => x[k]).filter(v => v != null));
+      const r2 = x => x == null || !isFinite(x) ? null : Math.round(x * 100) / 100, r0 = x => x == null || !isFinite(x) ? null : Math.round(x);
+      const up = A.t - r.t0, mpp = avg(vals('mpp')), rise = b.shoY != null ? b.shoY - topAvg('shoY') : null;
+      const rng = k => { const q = vals(k); return q.length ? Math.max(...q) - Math.min(...q) : null; };
+      this.repStats.push({
+        up: r0(up), hold: r0(B.t - A.t), down: r0(tEnd - B.t),
+        bot: r0(b.ang), top: r0(r.minAng), chin: r2(mn('chin')),
+        vel: mpp && rise != null && up > 0 ? r2(rise * mpp / (up / 1000)) : null,             // 平均拉起速度 m/s
+        shrug: b.ear != null && topAvg('ear') != null ? r2(b.ear - topAvg('ear')) : null,    // >0 = 顶部耸肩（耳肩距离比底部还小）
+        crane: b.head != null && top.head != null ? r2(top.head - b.head) : null,           // >0 = 顶部仰头 / 伸脖子
+        hipFlex: b.hip != null && mn('hip') != null ? r0(b.hip - mn('hip')) : null,          // 髋角减小（抬腿 / 收腹）
+        kneeFlex: b.knee != null && mn('knee') != null ? r0(b.knee - mn('knee')) : null,     // 膝角减小（蹬腿）
+        ankZ: r2(rng('ankZ')), lean: r0(rng('lean')),                                        // 脚前后摆幅（米）、躯干前后摆动（度）
+        leg: b.legY != null && mn('legY') != null ? r2(b.legY - mn('legY')) : null, sway: r2(rng('hx')),
+        tilt: r2(Math.max(...vals('tilt').map(Math.abs), 0)), diff: r0(top.diff), rot: r2(Math.max(...vals('rot').map(Math.abs), 0)) });
     }
     _pause() {
       this._flushRep(); this.rep = null;
@@ -295,6 +356,7 @@
         this.outMs = 0; this.topFrames = 0; this.startFrames++;
         const ang = a.arms.reduce((s, m) => s + m.angle, 0) / a.arms.length;
         if (this.startFrames === 1) { this.startT = t; this.botAng = ang; this.extT = null; } else this.botAng = Math.max(this.botAng, ang);
+        this._base(a, ang);
         if (this.extT == null && ang >= c.AN_PU_FULL_EXT) this.extT = t; // 本次回到起始位后，手臂首次伸直的时刻
         if (this.done && this.done.tEnd == null) this.done.tEnd = this.extT;
         const wy = a.arms.reduce((s, m) => s + m.wrist.y, 0) / a.arms.length;
@@ -351,6 +413,8 @@
         repTimes: this.reps.map(t => Math.round(t - t0)),
         groups: PullupDetector.groups(this.reps, cfg().GROUP_GAP_MS),
         repStats: this.repStats, partials: this.partials,
+        grip: (q => q.length ? Math.round(q.reduce((a, b) => a + b, 0) / q.length * 100) / 100 : null)(this.gripAcc.grip),
+        palm: (q => q.length ? Math.round(q.reduce((a, b) => a + b, 0) / q.length) : null)(this.gripAcc.palm),
       };
     }
   }

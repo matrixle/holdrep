@@ -124,7 +124,7 @@
   }
 
   /* ---------- 训练页顶部标签：模型 / 离地高度 / 推理耗时 ---------- */
-  function updatePerf() { $('#perf').textContent = `${HR_MODELS.label}${T.mode === 'hang' && T.det && T.det.lift != null ? ' ↑' + T.det.lift.toFixed(2) : ''}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}`; }
+  function updatePerf() { $('#perf').textContent = `${HR_MODELS.label.replace('BlazePose ', '')}${T.mode === 'hang' && T.det && T.det.lift != null ? ' ↑' + T.det.lift.toFixed(2) : ''}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}`; }
 
   /* ---------- 训练页渲染 ---------- */
   const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
@@ -133,7 +133,7 @@
     return `${SPIN[i.tick % 10]} 摄像头${i.cam ? '✓' : '…'} 模型${i.mdl ? '✓' : '… ' + (HR_MODELS.stage || '')} ${secs}s`;
   }
   function initMsg() {
-    setMsg(`正在初始化<br><b>${initText()}</b><br><small style="color:#9aa4b2">如弹出摄像头权限提示请选「允许」。<br>转圈和秒数在变化 = 正在加载；停止变化 = 页面卡死。<br>首次使用需要下载约 22MB 模型，网络慢时可能要几十秒，之后会缓存（更新版本不会重新下载）</small>`);
+    setMsg(`正在初始化<br><b>${initText()}</b><br><small style="color:#9aa4b2">如弹出摄像头权限提示请选「允许」。<br>转圈和秒数在变化 = 正在加载；停止变化 = 页面卡死。<br>首次使用需要下载约 40MB 模型，网络慢时可能要几十秒，之后会缓存（更新版本不会重新下载）</small>`);
   }
   function pillState() {
     if (T.init) return ['warn', '准备中 ' + initText()];
@@ -272,6 +272,11 @@
     return `<details class="list"><summary style="padding:12px 14px;color:var(--mute);font-size:14px">调试数据（${tr.length} 行，用于调参）</summary>
       <pre class="trace">时间 左/右脚离地(unit) 肘角 手腕高 肩速 脚ok 姿势ok 计时\n${lines.join('\n')}</pre></details>`;
   }
+  /* ---------- 识别模型（Heavy / Full） ---------- */
+  const syncPose = () => $$('#segPose button').forEach(b => b.classList.toggle('on', b.dataset.v === HR_MODELS.variant()));
+  $$('#segPose button').forEach(b => b.onclick = () => { HR_MODELS.setVariant(b.dataset.v); syncPose(); });
+  syncPose();
+
   /* ---------- 体重 / 热量估算 ---------- */
   const getWeight = () => { try { return +localStorage.getItem('hr_weight') || 0; } catch (e) { return 0; } };
   $('#weight').value = getWeight() || '';
@@ -291,12 +296,19 @@
 
   // 动作分析报告（见 report.js）
   function reportHTML(s) {
-    const items = HR_REPORT.build(s);
-    if (items == null) return '<div class="list"><h3>动作分析</h3><div class="ana info"><i>i</i><div><small>这条记录来自旧版本，没有动作分析数据。</small></div></div></div>';
-    if (!items.length) return '';
-    const ICON = { ok: '✓', tip: '!', warn: '✕', info: '→' };
-    return `<div class="list"><h3>动作分析</h3>${items.map(x => `<div class="ana ${x.lv}"><i>${ICON[x.lv]}</i><div><b>${x.t}</b><small>${x.d}</small></div></div>`).join('')}
-      <div class="ana"><div><small>基于前置摄像头的 2D 画面估算，看不到前后方向的摆动，仅供参考。</small></div></div></div>`;
+    const R = HR_REPORT.build(s);
+    if (!R) return '';
+    const esc = x => String(x);
+    const fault = (f, main) => `<div class="ana ${main ? 'main' : ''}"><b>${f.name}${f.n && f.N > 1 ? `<em>${f.n}/${f.N}</em>` : ''}</b>
+      <small>${f.why}</small>${f.cue ? `<p class="cue">口令：${f.cue}</p>` : ''}${main && f.drill ? `<p class="drill">纠正练习：${f.drill}</p>` : ''}</div>`;
+    let h = `<div class="list rep"><h3>动作分析</h3>
+      <div class="rep-head"><div class="rep-score"><b>${R.score}</b><small>${R.grade}</small></div><div>${R.headline}${R.meta.length ? `<small>${R.meta.join('<br>')}</small>` : ''}</div></div>`;
+    if (R.priority) h += `<div class="rep-sec">首要改进</div>` + fault(R.priority, true);
+    if (R.faults.length) h += `<div class="rep-sec">其他问题</div>` + R.faults.map(f => fault(f)).join('');
+    if (R.goods.length) h += `<div class="rep-sec">做得好的</div><div class="ana good">${R.goods.map(x => `<p>✓ ${x}</p>`).join('')}</div>`;
+    h += `<div class="rep-sec">${s.mode === 'hang' ? '每段' : '每次'}明细</div><div class="rep-tbl"><table><tr>${R.table.cols.map(x => `<th>${x}</th>`).join('')}</tr>${R.table.rows.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</table></div>`;
+    h += `<div class="rep-sec">训练安排</div><div class="ana">${R.plan.map(x => `<p>· ${x}</p>`).join('')}</div></div>`;
+    return h;
   }
 
   function detailHTML(s) {
