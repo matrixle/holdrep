@@ -1,4 +1,4 @@
-/* 姿态模型：MediaPipe BlazePose（默认 Heavy，精度最高；可在首页切换为 Full，更快）。
+/* 姿态模型：MediaPipe BlazePose（默认 Heavy，精度最高；可在「设置」页切换为 Full，更快）。
  * 统一接口：estimate(video) -> { keypoints: [{x,y,score}], world: [{x,y,z}] } | null
  * keypoints：像素坐标，COCO 顺序 0 鼻 3/4 左右耳 5/6 肩 7/8 肘 9/10 腕 11/12 髋 13/14 膝 15/16 踝，
  *            另加 17/18 左右小指根、19/20 左右食指根（判断握法）。

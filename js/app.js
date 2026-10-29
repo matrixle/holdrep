@@ -4,7 +4,7 @@
   const C = HR_CONFIG, D = HR_DET, DB = HR_DB;
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const MODE_NAME = { hang: 'Dead Hang 悬垂', pullup: '引体向上' };
+  const MODE_NAME = { hang: 'Dead Hang 悬垂', pullup: 'Pull-up 引体向上' };
   const cam = $('#cam'), overlay = $('#overlay');
   // 线条图标（与 App 图标同一风格：圆头粗线），颜色随 currentColor
   const svg = b => `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">${b}</svg>`;
@@ -13,6 +13,7 @@
     hang: svg('<circle cx="50" cy="57" r="29"/><path d="M42 16H58M50 16V28M50 57V40"/>'),
     list: svg('<path d="M34 28H82M34 50H82M34 72H82"/><circle cx="17" cy="28" r="2"/><circle cx="17" cy="50" r="2"/><circle cx="17" cy="72" r="2"/>'),
     chart: svg('<path d="M20 80V58M40 80V40M60 80V50M80 80V24"/>'),
+    settings: svg('<path d="M16 28H84M16 50H84M16 72H84"/><circle cx="36" cy="28" r="9" fill="#0b0d10"/><circle cx="64" cy="50" r="9" fill="#0b0d10"/><circle cx="44" cy="72" r="9" fill="#0b0d10"/>'),
   };
   $$('[data-ico]').forEach(e => { e.outerHTML = e.tagName === 'I' ? ICON[e.dataset.ico] : `<span class="ico">${ICON[e.dataset.ico]}</span>`; });
 
@@ -301,7 +302,7 @@
     const restMs = Math.max(0, s.durationMs - activeMs);
     return Math.round(((met - 1) * activeMs + (C.KCAL_REST_MET - 1) * restMs) / 3600000 * w * 10) / 10;
   }
-  const kcalStat = s => { const k = kcalOf(s); return stat('估算消耗', k ? k + ' 千卡' : '<small>首页填体重</small>'); };
+  const kcalStat = s => { const k = kcalOf(s); return stat('估算消耗', k ? k + ' 千卡' : '<small>设置页填体重</small>'); };
 
   // 动作分析报告（见 report.js）
   function reportHTML(s) {
@@ -458,6 +459,38 @@
   $$('[data-home]').forEach(b => b.onclick = () => show('home'));
   $('#goHistory').onclick = openHistory;
   $('#goReport').onclick = openReport;
+  $('#goSettings').onclick = () => { $('#backupMsg').textContent = ''; show('settings'); };
+
+  /* ---------- 记录备份：导出 / 导入 JSON ---------- */
+  const bmsg = t => { $('#backupMsg').textContent = t; };
+  $('#btnExport').onclick = async () => {
+    const list = await DB.all();
+    if (!list.length) return bmsg('还没有记录可导出');
+    const d = new Date(), name = `HoldRep-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.json`;
+    const file = new File([JSON.stringify({ app: 'HoldRep', version: 1, sessions: list })], name, { type: 'application/json' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return bmsg(`已导出 ${list.length} 条（可在分享菜单中选「存储到文件」）`); }
+    } catch (e) { if (e.name === 'AbortError') return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    bmsg(`已导出 ${list.length} 条`);
+  };
+  $('#btnImport').onclick = () => $('#importFile').click();
+  $('#importFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text()), list = Array.isArray(data) ? data : data.sessions;
+      if (!Array.isArray(list)) throw new Error('格式不对');
+      const have = new Set((await DB.all()).map(s => s.mode + s.startedAt));
+      let n = 0;
+      for (const s of list) {
+        if (!s || !s.mode || !s.startedAt || !s.result || have.has(s.mode + s.startedAt)) continue; // 已有的跳过，可重复导入
+        const c = Object.assign({}, s); delete c.id; await DB.add(c); n++;
+      }
+      bmsg(`导入 ${n} 条，跳过 ${list.length - n} 条（已存在或无效）`);
+    } catch (err) { bmsg('导入失败：' + err.message); }
+  };
   show('home'); applyBig();
   const showVer = (cache) => { $('#ver').textContent = `版本 ${HR_BUILD.version} · 更新于 ${HR_BUILD.time}` + (cache ? ` · 缓存 ${cache}` : ''); };
   showVer();

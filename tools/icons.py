@@ -15,8 +15,9 @@ def make(size, pad=0.0, s=1.15):
     def dot(x, y, r): cx, cy = P(x, y); d.ellipse([cx - u*r, cy - u*r, cx + u*r, cy + u*r], fill=255)
     w = .07 * s; top = .255 * s; bot = .20 * s + w / 2
     cy = .5 + (top - bot) / 2                                           # 图案上下居中
-    d.line([P(.5 - .34 * s, cy), P(.5 + .34 * s, cy)], fill=255, width=int(u * w))
-    dot(.5 - .34 * s, cy, w / 2); dot(.5 + .34 * s, cy, w / 2)           # 单杠
+    b = .27 * s                                                          # 单杠半长：比双臂略宽，四周留白
+    d.line([P(.5 - b, cy), P(.5 + b, cy)], fill=255, width=int(u * w))
+    dot(.5 - b, cy, w / 2); dot(.5 + b, cy, w / 2)                       # 单杠
     dot(.5, cy - .16 * s, .095 * s)                                     # 头
     r = .20 * s; d.arc([*P(.5 - r, cy - r), *P(.5 + r, cy + r)], 0, 180, fill=255, width=int(u * w))  # 双臂
     dot(.5 - r + w / 2, cy, w / 2); dot(.5 + r - w / 2, cy, w / 2)

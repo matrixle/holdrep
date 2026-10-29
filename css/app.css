@@ -14,7 +14,9 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
   padding:calc(var(--st) + 16px) 16px calc(var(--sb) + 24px)}
 
 /* 首页 */
-.brand{padding:24px 4px 20px}
+.brand{padding:24px 4px 20px;position:relative}
+.gear{position:absolute;right:0;top:28px;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:var(--mute)}
+.gear svg{width:28px;height:28px}
 .brand h1{margin:0;font-size:40px;letter-spacing:-1px;display:flex;align-items:center;gap:12px}
 .brand h1 img{width:48px;height:48px;border-radius:12px}
 .brand p{margin:4px 0 0;color:var(--mute)}
