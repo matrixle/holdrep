@@ -138,7 +138,7 @@
 
   /* ---------- 训练页顶部标签：模型 / 离地高度 / 推理耗时 ---------- */
   function updatePerf() {
-    const d = T.det, x = T.mode === 'hang' && d && d.lift != null ? ' ↑' + d.lift.toFixed(2) : T.mode === 'wallsit' && d && d.squat != null ? ' 腿' + d.squat.toFixed(2) : '';
+    const d = T.det, x = T.mode === 'hang' && d && d.lift != null ? ' ↑' + d.lift.toFixed(2) : T.mode === 'wallsit' && d ? (d.squat != null ? ' 腿' + d.squat.toFixed(2) : '') + (d.drop != null ? ' 膝' + d.drop.toFixed(2) : '') : '';
     $('#perf').textContent = `${HR_MODELS.label.replace('BlazePose ', '')}${x}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}`;
   }
 
@@ -170,7 +170,7 @@
       if (d.status === 'hanging') return ['ok', '● 静蹲计时中'];
       if (present && d.legState === 'none') return ['warn', '需拍到双腿（髋、膝，最好含脚踝）'];
       if (d.status === 'paused') return ['warn', '⏸ 自动暂停 · 蹲回去继续'];
-      return [present ? '' : 'warn', !present ? '未检测到人' : '等待静蹲…（背贴墙，大腿接近水平）'];
+      return [present ? '' : 'warn', !present ? '未检测到人' : d.legState === 'deep' ? '蹲太低了 · 升高到大腿水平' : d.legState === 'high' ? '蹲得太高 · 再往下到大腿水平' : '等待静蹲…（背贴墙，大腿水平）'];
     }
     return ({ waiting: [present ? '' : 'warn', present ? '请回到悬垂起始位' : '未检测到人'],
       ready: ['ok', '● 起始位就绪'], pulling: ['ok', '● 动作中'],
@@ -291,9 +291,9 @@
     if (!tr || !tr.length) return '';
     const f = v => v == null ? ' -- ' : (v < 0 ? '' : ' ') + v.toFixed(2), ws = mode === 'wallsit';
     const lines = tr.map(r => ws
-      ? `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 膝${r[3] == null ? '--' : r[3]} 速${f(r[5])} 蹲${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`
+      ? `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 膝角${r[3] == null ? '--' : r[3]} 膝低${f(r[4])} 速${f(r[5])} 蹲${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`
       : `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 肘${r[3] == null ? '--' : r[3]} 手${f(r[4])} 速${f(r[5])} 脚${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`);
-    const head = ws ? '时间 左/右腿 大腿÷小腿 2D膝角 肩速 下蹲ok 姿势ok 计时' : '时间 左/右脚离地(unit) 肘角 手腕高 肩速 脚ok 姿势ok 计时';
+    const head = ws ? '时间 左/右腿 大腿÷小腿 2D膝角 膝盖低于髋÷躯干 肩速 下蹲ok 姿势ok 计时' : '时间 左/右脚离地(unit) 肘角 手腕高 肩速 脚ok 姿势ok 计时';
     return `<details class="list"><summary style="padding:12px 14px;color:var(--mute);font-size:14px">调试数据（${tr.length} 行，用于调参）</summary>
       <pre class="trace">${head}\n${lines.join('\n')}</pre></details>`;
   }

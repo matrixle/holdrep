@@ -55,14 +55,15 @@
     // 只用脚踝、不用脚尖：悬垂时脚尖自然下垂，抬高量偏小；且 BlazePose 在拖鞋上的脚尖/脚跟点不稳。
     const y = i => { const p = kp(k, i); return p ? p.y : null; };
     // 腿部形状（靠墙静蹲用）：正面仰拍时大腿朝向镜头被压缩，2D 膝角仍接近 180°，所以主要看「大腿 / 小腿」2D 长度比；
-    // 侧面拍时大腿水平，看 2D 膝角。没拍到脚踝时退而用「大腿 / 躯干」。
+    // 再看「膝盖比髋低多少 / 躯干」：太高（半蹲）时膝盖低得多，蹲太低（深蹲）时膝盖与髋齐平甚至更高。侧面拍时看 2D 膝角。
     const torso = hipMid ? Math.hypot(hipMid.x - shoMid.x, hipMid.y - shoMid.y) : 0;
     const legs = [[lH, lK, kp(k, 15)], [rH, rK, kp(k, 16)]].map(([h, kn, an]) => {
       if (!h || !kn) return null;
       const th = Math.hypot(h.x - kn.x, h.y - kn.y), sh = an ? Math.hypot(kn.x - an.x, kn.y - an.y) : 0;
-      return { ratio: sh ? th / sh : null, tt: torso ? th / torso : null, ang: an ? angle(h, kn, an) : null };
+      return { ratio: sh ? th / sh : null, drop: torso ? (kn.y - h.y) / torso : null, ang: an ? angle(h, kn, an) : null };
     });
-    return { shoMid, unit, arms, nose, hipMid, angLR, legY, earSho, legs,
+    const side = torso > 0 && Math.hypot(lS.x - rS.x, lS.y - rS.y) / torso < 0.5; // 侧身对镜头：肩宽显得很窄
+    return { shoMid, unit, arms, nose, hipMid, angLR, legY, earSho, legs, side,
       head: earY != null && nose ? (earY - nose.y) / unit : null,    // 鼻子高出耳朵多少：仰头 / 伸脖子够杠时变大
       grip: lW && rW ? Math.abs(lW.x - rW.x) / sw : null,             // 握距 / 肩宽
       tilt: (lS.y - rS.y) / unit,                                      // >0 = 左肩低
@@ -273,19 +274,28 @@
   /* ---------------- Wall Sit 靠墙静蹲 ----------------
    * 计时逻辑（进入去抖、短暂丢失接续、段的拆分与最短时长）与 Dead Hang 完全相同，只把「姿势成立」换成「下蹲 + 静止」。 */
   class WallSitDetector extends HangDetector {
-    reset() { super.reset(); this.squat = null; this.legState = 'none'; }
+    reset() { super.reset(); this.squat = null; this.drop = null; this.legState = 'none'; }
     _learn() {}                     // 不需要地面校准
-    // 每条拍到的腿都要「蹲下」，至少拍到一条；已在计时中时阈值放宽（迟滞）
-    _squat(a) {
+    // 每条拍到的腿都要在「静蹲高度」内，至少拍到一条；已在计时中时阈值放宽（迟滞）
+    // 返回每条腿：'down' 到位 | 'high' 太高 / 站着 | 'deep' 蹲太低 | null 判断不了
+    _leg(l, side) {
       const c = cfg(), k = this.active ? c.WS_HOLD_RATIO : 1;
-      const legs = a.legs.filter(Boolean);
-      const down = l => (l.ang != null && l.ang <= c.WS_KNEE_ANGLE * k) ||
-        (l.ratio != null ? l.ratio <= c.WS_THIGH_SHIN * k : l.tt != null && l.tt <= c.WS_THIGH_TORSO * k);
-      const rs = legs.map(l => l.ratio).filter(v => v != null);
+      if (side) {
+        if (l.ang == null) return null;
+        return l.ang > c.WS_KNEE_ANGLE * k ? 'high' : l.ang < c.WS_KNEE_ANGLE_MIN / k ? 'deep' : 'down';
+      }
+      if (l.drop == null) return null;
+      if (l.drop < c.WS_DROP_MIN / k) return 'deep';
+      if (l.drop > c.WS_DROP_MAX * k || (l.ratio != null && l.ratio > c.WS_THIGH_SHIN * k)) return 'high';
+      return 'down';
+    }
+    _squat(a) {
+      const st = a.legs.filter(Boolean).map(l => this._leg(l, a.side)).filter(Boolean);
+      const rs = a.legs.filter(l => l && l.ratio != null).map(l => l.ratio);
       this.squat = rs.length ? Math.min(...rs) : null;
-      const ok = legs.length > 0 && legs.every(down);
-      this.legState = !legs.length ? 'none' : ok ? 'down' : 'up';
-      return ok;
+      this.drop = a.legs.filter(l => l && l.drop != null).map(l => l.drop).reduce((m, v) => m == null ? v : Math.min(m, v), null);
+      this.legState = !st.length ? 'none' : st.every(s => s === 'down') ? 'down' : st.includes('deep') ? 'deep' : 'high';
+      return this.legState === 'down';
     }
     _valid(a) {
       this._ok = this._squat(a);
@@ -317,11 +327,11 @@
         tremor: n >= 40 ? r2(tail(s.spd, qn) / Math.max(0.02, head(s.spd, qn))) : null,
         tilt: r2(avg(s.tilt)), sway: r2(sd(s.hx)), knee: r0(avg(s.knee)), hip: r0(avg(s.hip)) };
     }
-    // 调试轨迹：t, 左腿 大腿/小腿, 右腿 大腿/小腿, 平均 2D 膝角, -, 肩速, 下蹲ok, 姿势ok, 计时中
+    // 调试轨迹：t, 左腿 大腿/小腿, 右腿 大腿/小腿, 最小 2D 膝角, 膝盖低于髋/躯干, 肩速, 下蹲ok, 姿势ok, 计时中
     _traceRow(a, t, valid) {
       const r2 = x => x == null ? null : Math.round(x * 100) / 100, L = a.legs[0], R = a.legs[1];
       const as = a.legs.filter(l => l && l.ang != null).map(l => l.ang);
-      return [t, r2(L && L.ratio), r2(R && R.ratio), as.length ? Math.round(Math.min(...as)) : null, null,
+      return [t, r2(L && L.ratio), r2(R && R.ratio), as.length ? Math.round(Math.min(...as)) : null, r2(this.drop),
         r2(this.speed), this._ok ? 1 : 0, valid ? 1 : 0, this.active ? 1 : 0];
     }
   }
