@@ -54,7 +54,15 @@
     // 这样站立时双脚前后位置不同、或只抬一只脚，都不会被误判为离地。
     // 只用脚踝、不用脚尖：悬垂时脚尖自然下垂，抬高量偏小；且 BlazePose 在拖鞋上的脚尖/脚跟点不稳。
     const y = i => { const p = kp(k, i); return p ? p.y : null; };
-    return { shoMid, unit, arms, nose, hipMid, angLR, legY, earSho,
+    // 腿部形状（靠墙静蹲用）：正面仰拍时大腿朝向镜头被压缩，2D 膝角仍接近 180°，所以主要看「大腿 / 小腿」2D 长度比；
+    // 侧面拍时大腿水平，看 2D 膝角。没拍到脚踝时退而用「大腿 / 躯干」。
+    const torso = hipMid ? Math.hypot(hipMid.x - shoMid.x, hipMid.y - shoMid.y) : 0;
+    const legs = [[lH, lK, kp(k, 15)], [rH, rK, kp(k, 16)]].map(([h, kn, an]) => {
+      if (!h || !kn) return null;
+      const th = Math.hypot(h.x - kn.x, h.y - kn.y), sh = an ? Math.hypot(kn.x - an.x, kn.y - an.y) : 0;
+      return { ratio: sh ? th / sh : null, tt: torso ? th / torso : null, ang: an ? angle(h, kn, an) : null };
+    });
+    return { shoMid, unit, arms, nose, hipMid, angLR, legY, earSho, legs,
       head: earY != null && nose ? (earY - nose.y) / unit : null,    // 鼻子高出耳朵多少：仰头 / 伸脖子够杠时变大
       grip: lW && rW ? Math.abs(lW.x - rW.x) / sw : null,             // 握距 / 肩宽
       tilt: (lS.y - rS.y) / unit,                                      // >0 = 左肩低
@@ -204,8 +212,7 @@
       } else if (!a) this.speed = 0;
       this.prevSho = a ? a.shoMid : null;
 
-      const hang = !!a && this._isHang(a), feet = !!a && this._feetOff(a);
-      const valid = hang && feet && this.speed <= c.HANG_MAX_SWING_SPEED;
+      const valid = !!a && this._valid(a);
       const wasActive = this.active;
 
       if (!this.active) {
@@ -227,15 +234,24 @@
         if (this.lostMs >= c.HANG_EXIT_MS) this._end(); // 丢失期间不计入时长
       }
       if (this.active && a && valid) this._stat(a);
-      // 调试轨迹：t, 左脚离地, 右脚离地, 最小肘角, 最小手腕高度, 肩速, 脚离地ok, 姿势ok(valid), 计时中
       if (a && (this.active !== wasActive || t - this._lastTrace >= 500) && this.trace.length < 2400) {
         this._lastTrace = t;
-        const r2 = x => x == null ? null : Math.round(x * 100) / 100, ls = this.liftSides || [];
-        this.trace.push([t, r2(ls[0]), r2(ls[1]),
-          a.arms.length ? Math.round(Math.min(...a.arms.map(m => m.angle))) : null,
-          a.arms.length ? r2(Math.min(...a.arms.map(m => m.wristUp))) : null,
-          r2(this.speed), feet ? 1 : 0, valid ? 1 : 0, this.active ? 1 : 0]);
+        this.trace.push(this._traceRow(a, t, valid));
       }
+    }
+    // 悬垂成立：手臂姿势 + 双脚离地 + 身体基本静止（两项都要算，离地高度用于调试显示）
+    _valid(a) {
+      const hang = this._isHang(a), feet = this._feetOff(a);
+      this._ok = feet;
+      return hang && feet && this.speed <= cfg().HANG_MAX_SWING_SPEED;
+    }
+    // 调试轨迹：t, 左脚离地, 右脚离地, 最小肘角, 最小手腕高度, 肩速, 脚离地ok, 姿势ok(valid), 计时中
+    _traceRow(a, t, valid) {
+      const r2 = x => x == null ? null : Math.round(x * 100) / 100, ls = this.liftSides || [];
+      return [t, r2(ls[0]), r2(ls[1]),
+        a.arms.length ? Math.round(Math.min(...a.arms.map(m => m.angle))) : null,
+        a.arms.length ? r2(Math.min(...a.arms.map(m => m.wristUp))) : null,
+        r2(this.speed), this._ok ? 1 : 0, valid ? 1 : 0, this.active ? 1 : 0];
     }
 
     finish(t0) {
@@ -251,6 +267,62 @@
         avgMs: n ? Math.round(total / n) : 0,
         maxMs: n ? Math.round(Math.max(...this.segments.map(s => s.ms))) : 0,
       };
+    }
+  }
+
+  /* ---------------- Wall Sit 靠墙静蹲 ----------------
+   * 计时逻辑（进入去抖、短暂丢失接续、段的拆分与最短时长）与 Dead Hang 完全相同，只把「姿势成立」换成「下蹲 + 静止」。 */
+  class WallSitDetector extends HangDetector {
+    reset() { super.reset(); this.squat = null; this.legState = 'none'; }
+    _learn() {}                     // 不需要地面校准
+    // 每条拍到的腿都要「蹲下」，至少拍到一条；已在计时中时阈值放宽（迟滞）
+    _squat(a) {
+      const c = cfg(), k = this.active ? c.WS_HOLD_RATIO : 1;
+      const legs = a.legs.filter(Boolean);
+      const down = l => (l.ang != null && l.ang <= c.WS_KNEE_ANGLE * k) ||
+        (l.ratio != null ? l.ratio <= c.WS_THIGH_SHIN * k : l.tt != null && l.tt <= c.WS_THIGH_TORSO * k);
+      const rs = legs.map(l => l.ratio).filter(v => v != null);
+      this.squat = rs.length ? Math.min(...rs) : null;
+      const ok = legs.length > 0 && legs.every(down);
+      this.legState = !legs.length ? 'none' : ok ? 'down' : 'up';
+      return ok;
+    }
+    _valid(a) {
+      this._ok = this._squat(a);
+      return this._ok && this.speed <= cfg().WS_MAX_SPEED;
+    }
+    // 计时中逐帧累计（动作分析用）：深度、左右差、晃动、侧倾、3D 膝角 / 髋角
+    _stat(a) {
+      const s = this.st || (this.st = { r: [], ang: [], diff: [], spd: [], tilt: [], hx: [], knee: [], hip: [] });
+      const push = (key, v) => { if (v != null && isFinite(v)) s[key].push(v); };
+      const L = a.legs[0], R = a.legs[1], rs = a.legs.filter(l => l && l.ratio != null).map(l => l.ratio);
+      const as = a.legs.filter(l => l && l.ang != null).map(l => l.ang);
+      if (rs.length) push('r', rs.reduce((x, y) => x + y, 0) / rs.length);
+      if (as.length) push('ang', as.reduce((x, y) => x + y, 0) / as.length);
+      if (L && R && L.ratio != null && R.ratio != null) push('diff', L.ratio - R.ratio);
+      push('spd', this.speed); push('tilt', a.tilt);
+      if (a.hipMid) push('hx', a.hipMid.x / a.unit);
+      if (a.w3) { push('knee', a.w3.knee); push('hip', a.w3.hip); }
+    }
+    _stSummary() {
+      const s = this.st; if (!s || !s.spd.length) return null;
+      const r2 = x => x == null ? null : Math.round(x * 100) / 100, r0 = x => x == null ? null : Math.round(x);
+      const avg = q => q.length ? q.reduce((a, b) => a + b, 0) / q.length : null;
+      const sd = q => { if (q.length < 3) return null; const m = avg(q); return Math.sqrt(avg(q.map(x => (x - m) ** 2))); };
+      const n = s.spd.length, qn = Math.max(5, Math.floor(n / 4));
+      const head = (q, k) => avg(q.slice(0, k)), tail = (q, k) => avg(q.slice(-k));
+      return { n, r: r2(avg(s.r)), ang: r0(avg(s.ang)), diff: r2(avg(s.diff)), spd: r2(avg(s.spd)),
+        rise: s.r.length >= 20 ? r2(tail(s.r, qn) - head(s.r, qn)) : null,                    // >0 = 后段大腿变长 = 臀部抬高
+        riseAng: s.ang.length >= 20 ? r0(tail(s.ang, qn) - head(s.ang, qn)) : null,
+        tremor: n >= 40 ? r2(tail(s.spd, qn) / Math.max(0.02, head(s.spd, qn))) : null,
+        tilt: r2(avg(s.tilt)), sway: r2(sd(s.hx)), knee: r0(avg(s.knee)), hip: r0(avg(s.hip)) };
+    }
+    // 调试轨迹：t, 左腿 大腿/小腿, 右腿 大腿/小腿, 平均 2D 膝角, -, 肩速, 下蹲ok, 姿势ok, 计时中
+    _traceRow(a, t, valid) {
+      const r2 = x => x == null ? null : Math.round(x * 100) / 100, L = a.legs[0], R = a.legs[1];
+      const as = a.legs.filter(l => l && l.ang != null).map(l => l.ang);
+      return [t, r2(L && L.ratio), r2(R && R.ratio), as.length ? Math.round(Math.min(...as)) : null, null,
+        r2(this.speed), this._ok ? 1 : 0, valid ? 1 : 0, this.active ? 1 : 0];
     }
   }
 
@@ -426,5 +498,5 @@
     }
   }
 
-  g.HR_DET = { HangDetector, PullupDetector, analyze };
+  g.HR_DET = { HangDetector, WallSitDetector, PullupDetector, analyze };
 })(typeof window !== 'undefined' ? window : globalThis);

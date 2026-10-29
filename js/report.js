@@ -216,5 +216,82 @@
       table: { cols: ['段', '时长(秒)', '肘角', '晃动', '分', '问题'], rows } };
   }
 
-  g.HR_REPORT = { build: s => s.mode === 'hang' ? hang(s.result) : pullup(s.result) };
+  /* ---------------- Wall Sit 靠墙静蹲 ---------------- */
+  const WS = {
+    high: { name: '蹲得偏高（大腿未到水平）', w: 20,
+      why: '标准靠墙静蹲是大腿与地面平行、膝角约 90°；位置越高，股四头肌负荷越小，训练效果打折扣。',
+      cue: '后背贴墙往下滑，直到大腿与地面平行，膝盖在脚踝正上方。',
+      drill: '暂时蹲不到水平，就先在能坚持 20 秒的高度练，每周往下降一点。' },
+    rise: { name: '后段逐渐站高', w: 10,
+      why: '坚持不住时不自觉把臀部往上抬，负荷变小，后半段的时间"打了折"。',
+      cue: '感觉要往上滑时，宁可提前结束这一段，也不要抬高。',
+      drill: '缩短单段、增加组数：每组只做能保持标准高度的时长。' },
+    swing: { name: '身体不稳', w: 10,
+      why: '上身晃动或频繁调整，说明核心和下肢没有稳定发力，也可能后背没有贴实墙面。',
+      cue: '后背、臀部贴墙，双手抱胸或放在大腿上不动，均匀呼吸，不要憋气。',
+      drill: '' },
+    asym: { name: '重心偏一侧', w: 10,
+      why: '两侧大腿高度不同或身体侧倾，说明一条腿承担了更多负荷，长期会放大两侧力量差异。',
+      cue: '双脚与肩同宽、脚尖朝前，体重均匀压在两只脚上。',
+      drill: '单腿靠墙静蹲（另一只脚轻点地）：弱侧先练，每侧 3 × 10–15 秒。' },
+  };
+
+  function wallsit(r) {
+    const c = C(), segs = r.segments.filter(x => x.st && has(x.st.spd));
+    if (!segs.length) return null;
+    // 侧面拍时大腿 / 小腿比不可用（大腿不压缩），改看 2D 膝角
+    const side = x => has(x.st.ang) && x.st.ang <= 140;
+    const segFaults = x => {
+      const s = x.st, f = [];
+      if (side(x) ? s.ang > c.AN_WS_KNEE : has(s.r) && s.r > c.AN_WS_DEPTH) f.push('high');
+      if (x.ms >= 10000 && (side(x) ? has(s.riseAng) && s.riseAng > 10 : has(s.rise) && s.rise > c.AN_WS_RISE)) f.push('rise');
+      if (s.spd > c.AN_WS_SPEED || (has(s.sway) && s.sway > c.AN_HANG_SWAY)) f.push('swing');
+      if (Math.abs(s.tilt) > c.AN_TILT || (has(s.diff) && Math.abs(s.diff) > c.AN_WS_LR)) f.push('asym');
+      return f;
+    };
+    const per = segs.map(segFaults), count = {};
+    per.forEach(f => f.forEach(k => count[k] = (count[k] || 0) + 1));
+    const scores = per.map(f => Math.max(0, 100 - f.reduce((s, k) => s + WS[k].w, 0)));
+    const W = segs.reduce((s, x) => s + x.ms, 0), score = Math.round(segs.reduce((s, x, i) => s + scores[i] * x.ms, 0) / W);
+    const wavg = k => { const q = segs.filter(x => has(x.st[k])); const w = q.reduce((s, x) => s + x.ms, 0); return w ? q.reduce((s, x) => s + x.st[k] * x.ms, 0) / w : null; };
+
+    const detail = k => {
+      if (k === 'asym') {
+        const t = wavg('tilt'), d = wavg('diff'), parts = [];
+        if (Math.abs(t) > c.AN_TILT) parts.push(`${t > 0 ? '左' : '右'}肩偏低`);
+        if (has(d) && Math.abs(d) > c.AN_WS_LR) parts.push(`${d > 0 ? '左' : '右'}腿蹲得更高`);
+        return parts.length ? parts.join('、') + '。' : '';
+      }
+      return '';
+    };
+    const ranked = Object.keys(count).sort((a, b) => count[b] * WS[b].w - count[a] * WS[a].w || WS[b].w - WS[a].w);
+    const faults = ranked.map(k => ({ k, name: WS[k].name, n: count[k], N: segs.length, why: (detail(k) + ' ' + WS[k].why).trim(), cue: WS[k].cue, drill: WS[k].drill }));
+    const tr = segs.map(x => x.st.tremor).filter(has);
+    if (tr.length && Math.max(...tr) > c.AN_HANG_TREMOR) faults.push({ k: 'tremor', name: '后段明显抖动', why: '每段后期晃动是前期的两倍以上，是大腿肌肉接近力竭的信号。', cue: '腿开始明显发抖后再坚持 5–10 秒就可以起身，保证质量。', drill: '' });
+    const ms = r.segments.map(x => x.ms);
+    if (ms.length >= 3 && ms[ms.length - 1] < ms[0] * 0.6) faults.push({ k: 'decay', name: '各段时长衰减明显', why: `第 1 段 ${sec(ms[0])} 秒，最后一段 ${sec(ms[ms.length - 1])} 秒，组间恢复不足。`, cue: '段间休息 60–90 秒，起身走动、拉伸大腿前侧。', drill: '' });
+
+    const goods = [], none = k => !count[k];
+    if (none('high')) goods.push('下蹲到位，大腿基本与地面平行');
+    if (none('rise') && segs.some(x => x.ms >= 10000)) goods.push('全程保持高度，没有逐渐站起');
+    if (none('swing')) goods.push('身体稳定');
+    if (none('asym')) goods.push('左右对称，重心居中');
+    const meta = ['膝盖不要超过脚尖、不要内扣；膝盖有不适就升高位置或停止'];
+
+    const best = Math.max(...ms) / 1000, plan = [];
+    if (best < 30) plan.push(`每周 3–4 次：4 组 × ${Math.max(10, Math.round(best * 0.7))} 秒，组间 60 秒；每周把单次时长提高 5 秒。`);
+    else if (best <= 90) plan.push(`每周 3 次：3 组 × ${Math.round(best * 0.8)} 秒，组间 60–90 秒，最后一组坚持到力竭。`);
+    else plan.push('可以进阶：手持哑铃 / 背包负重、膝间夹球，或单腿靠墙静蹲。');
+    if (faults.length && faults[0].drill) plan.push(`纠正练习：${faults[0].drill}`);
+    plan.push(`下次目标：单次 ${Math.ceil(best * 1.1 / 5) * 5} 秒，且动作评分不低于本次。`);
+
+    const rows = segs.map((x, i) => [i + 1, sec(x.ms), per[i].includes('high') ? '偏高' : '到位', has(x.st.spd) ? x.st.spd.toFixed(2) : '–', scores[i],
+      per[i].map(k => ({ high: '偏高', rise: '站高', swing: '不稳', asym: '偏侧' })[k]).join(' ') || '✓']);
+    return { score, grade: grade(score),
+      headline: `${segs.length} 段静蹲，最长 ${sec(best * 1000)} 秒` + (faults.length ? `，主要问题：${faults[0].name}` : '，动作标准'),
+      priority: faults[0] || null, faults: faults.slice(1), goods, meta, plan,
+      table: { cols: ['段', '时长(秒)', '深度', '晃动', '分', '问题'], rows } };
+  }
+
+  g.HR_REPORT = { build: s => s.mode === 'hang' ? hang(s.result) : s.mode === 'wallsit' ? wallsit(s.result) : pullup(s.result) };
 })(typeof window !== 'undefined' ? window : globalThis);

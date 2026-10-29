@@ -1,7 +1,7 @@
 {
   "name": "Hold Rep",
   "short_name": "Hold Rep",
-  "description": "单杠训练自动计时与计数（离线可用）",
+  "description": "单杠与靠墙静蹲训练自动计时、计数（离线可用）",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -4,13 +4,16 @@
   const C = HR_CONFIG, D = HR_DET, DB = HR_DB;
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const MODE_NAME = { hang: 'Dead Hang 悬垂', pullup: 'Pull-up 引体向上' };
+  const MODE_NAME = { hang: 'Dead Hang 悬垂', wallsit: 'Wall Sit 靠墙静蹲', pullup: 'Pull-up 引体向上' };
+  const isTimer = m => m !== 'pullup'; // 计时类模式：Dead Hang、Wall Sit
+  const HOLD_WORD = { hang: '悬挂', wallsit: '静蹲' };
   const cam = $('#cam'), overlay = $('#overlay');
   // 线条图标（与 App 图标同一风格：圆头粗线），颜色随 currentColor
   const svg = b => `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">${b}</svg>`;
   const ICON = {
     pullup: svg('<path d="M14 54H86"/><circle cx="50" cy="32" r="11" fill="currentColor" stroke="none"/><path d="M28 54A22 22 0 0 0 72 54"/>'),
     hang: svg('<circle cx="50" cy="57" r="29"/><path d="M42 16H58M50 16V28M50 57V40"/>'),
+    wallsit: svg('<path d="M20 12V88"/><circle cx="38" cy="22" r="10" fill="currentColor" stroke="none"/><path d="M33 40V62H66V88"/>'),
     list: svg('<path d="M34 28H82M34 50H82M34 72H82"/><circle cx="17" cy="28" r="2"/><circle cx="17" cy="50" r="2"/><circle cx="17" cy="72" r="2"/>'),
     chart: svg('<path d="M20 80V58M40 80V40M60 80V50M80 80V24"/>'),
     settings: svg('<path d="M16 28H84M16 50H84M16 72H84"/><circle cx="36" cy="28" r="9" fill="#0b0d10"/><circle cx="64" cy="50" r="9" fill="#0b0d10"/><circle cx="44" cy="72" r="9" fill="#0b0d10"/>'),
@@ -79,9 +82,9 @@
 
   async function enterTrain(mode) {
     Object.assign(T, { mode, phase: 'idle', pose: null, on: false, ms: 0 });
-    T.det = mode === 'hang' ? new D.HangDetector() : new D.PullupDetector(beep);
+    T.det = mode === 'hang' ? new D.HangDetector() : mode === 'wallsit' ? new D.WallSitDetector() : new D.PullupDetector(beep);
     show('train'); applyBig();
-    $('#hudHang').style.display = mode === 'hang' ? '' : 'none';
+    $('#hudHang').style.display = isTimer(mode) ? '' : 'none';
     $('#hudPull').style.display = mode === 'pullup' ? '' : 'none';
     T.init = { t0: performance.now(), cam: false, mdl: false, tick: 0 };
     clearInterval(T.initTimer);
@@ -134,7 +137,10 @@
   }
 
   /* ---------- 训练页顶部标签：模型 / 离地高度 / 推理耗时 ---------- */
-  function updatePerf() { $('#perf').textContent = `${HR_MODELS.label.replace('BlazePose ', '')}${T.mode === 'hang' && T.det && T.det.lift != null ? ' ↑' + T.det.lift.toFixed(2) : ''}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}`; }
+  function updatePerf() {
+    const d = T.det, x = T.mode === 'hang' && d && d.lift != null ? ' ↑' + d.lift.toFixed(2) : T.mode === 'wallsit' && d && d.squat != null ? ' 腿' + d.squat.toFixed(2) : '';
+    $('#perf').textContent = `${HR_MODELS.label.replace('BlazePose ', '')}${x}${T.ms ? ' · ' + Math.round(T.ms) + 'ms' : ''}`;
+  }
 
   /* ---------- 训练页渲染 ---------- */
   const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
@@ -160,6 +166,12 @@
       if (d.status === 'paused') return ['warn', '⏸ 自动暂停 · 回到悬垂继续'];
       return [present ? '' : 'warn', !present ? '未检测到人' : gs === 'onground' ? '脚还在地面 · 请离地悬垂' : '等待悬垂…'];
     }
+    if (T.mode === 'wallsit') {
+      if (d.status === 'hanging') return ['ok', '● 静蹲计时中'];
+      if (present && d.legState === 'none') return ['warn', '需拍到双腿（髋、膝，最好含脚踝）'];
+      if (d.status === 'paused') return ['warn', '⏸ 自动暂停 · 蹲回去继续'];
+      return [present ? '' : 'warn', !present ? '未检测到人' : '等待静蹲…（背贴墙，大腿接近水平）'];
+    }
     return ({ waiting: [present ? '' : 'warn', present ? '请回到悬垂起始位' : '未检测到人'],
       ready: ['ok', '● 起始位就绪'], pulling: ['ok', '● 动作中'],
       paused: ['warn', '⏸ 自动暂停 · 回到悬垂继续'] })[d.status];
@@ -180,7 +192,7 @@
   // 数字刷新：每个动画帧调用，并在两次识别之间做线性插值，让毫秒位走得顺滑
   function updateNums() {
     const d = T.det; if (!d) return;
-    if (T.mode === 'hang') {
+    if (isTimer(T.mode)) {
       let cur = d.cur, tot = d.totalMs;
       if (T.phase === 'running' && d.active && d.lastT != null) {
         const extra = Math.min(performance.now() - d.lastT, 300); cur += extra; tot += extra;
@@ -263,7 +275,7 @@
     T.phase = 'ended';
     const result = T.det.finish(T.t0);
     const s = { mode: T.mode, startedAt: T.startedAt, endedAt: Date.now(), durationMs: Math.round(now - T.t0), result };
-    const empty = T.mode === 'hang' ? result.count === 0 : result.total === 0;
+    const empty = isTimer(T.mode) ? result.count === 0 : result.total === 0;
     T.on = false; cancelAnimationFrame(T.raf); stopCamera(); unlockScreen();
     let saved = false;
     if (!empty) { try { s.id = await DB.add(s); saved = true; } catch (e) { console.error(e); } }
@@ -275,12 +287,15 @@
   const rows = (title, items) => `<div class="list"><h3>${title}</h3>${items.map(([a, b]) => `<div class="li"><span>${a}</span><span>${b}</span></div>`).join('')}</div>`;
 
   // 调试数据：训练中数字一直在变、来不及截图，所以全程记录，结束后在结果页 / 历史详情里慢慢看
-  function traceHTML(tr) {
+  function traceHTML(tr, mode) {
     if (!tr || !tr.length) return '';
-    const f = v => v == null ? ' -- ' : (v < 0 ? '' : ' ') + v.toFixed(2);
-    const lines = tr.map(r => `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 肘${r[3] == null ? '--' : r[3]} 手${f(r[4])} 速${f(r[5])} 脚${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`);
+    const f = v => v == null ? ' -- ' : (v < 0 ? '' : ' ') + v.toFixed(2), ws = mode === 'wallsit';
+    const lines = tr.map(r => ws
+      ? `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 膝${r[3] == null ? '--' : r[3]} 速${f(r[5])} 蹲${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`
+      : `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 肘${r[3] == null ? '--' : r[3]} 手${f(r[4])} 速${f(r[5])} 脚${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`);
+    const head = ws ? '时间 左/右腿 大腿÷小腿 2D膝角 肩速 下蹲ok 姿势ok 计时' : '时间 左/右脚离地(unit) 肘角 手腕高 肩速 脚ok 姿势ok 计时';
     return `<details class="list"><summary style="padding:12px 14px;color:var(--mute);font-size:14px">调试数据（${tr.length} 行，用于调参）</summary>
-      <pre class="trace">时间 左/右脚离地(unit) 肘角 手腕高 肩速 脚ok 姿势ok 计时\n${lines.join('\n')}</pre></details>`;
+      <pre class="trace">${head}\n${lines.join('\n')}</pre></details>`;
   }
   /* ---------- 识别模型（Heavy / Full） ---------- */
   const syncPose = () => $$('#segPose button').forEach(b => b.classList.toggle('on', b.dataset.v === HR_MODELS.variant()));
@@ -298,7 +313,7 @@
   function kcalOf(s) {
     const w = getWeight(), r = s.result;
     if (!w) return 0;
-    const [met, activeMs] = s.mode === 'hang' ? [C.KCAL_HANG_MET, r.totalMs] : [C.KCAL_PULLUP_MET, r.total * C.KCAL_PULLUP_REP_SEC * 1000];
+    const [met, activeMs] = s.mode === 'hang' ? [C.KCAL_HANG_MET, r.totalMs] : s.mode === 'wallsit' ? [C.KCAL_WALLSIT_MET, r.totalMs] : [C.KCAL_PULLUP_MET, r.total * C.KCAL_PULLUP_REP_SEC * 1000];
     const restMs = Math.max(0, s.durationMs - activeMs);
     return Math.round(((met - 1) * activeMs + (C.KCAL_REST_MET - 1) * restMs) / 3600000 * w * 10) / 10;
   }
@@ -316,7 +331,7 @@
     if (R.priority) h += `<div class="rep-sec">首要改进</div>` + fault(R.priority, true);
     if (R.faults.length) h += `<div class="rep-sec">其他问题</div>` + R.faults.map(f => fault(f)).join('');
     if (R.goods.length) h += `<div class="rep-sec">做得好的</div><div class="ana good">${R.goods.map(x => `<p>✓ ${x}</p>`).join('')}</div>`;
-    h += `<div class="rep-sec">${s.mode === 'hang' ? '每段' : '每次'}明细</div><div class="rep-tbl"><table><tr>${R.table.cols.map(x => `<th>${x}</th>`).join('')}</tr>${R.table.rows.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</table></div>`;
+    h += `<div class="rep-sec">${isTimer(s.mode) ? '每段' : '每次'}明细</div><div class="rep-tbl"><table><tr>${R.table.cols.map(x => `<th>${x}</th>`).join('')}</tr>${R.table.rows.map(r => `<tr>${r.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</table></div>`;
     h += `<div class="rep-sec">训练安排</div><div class="ana">${R.plan.map(x => `<p>· ${x}</p>`).join('')}</div></div>`;
     return h;
   }
@@ -324,12 +339,13 @@
   function detailHTML(s) {
     const r = s.result;
     let h = `<p class="hint" style="margin-top:0">${fmtDate(s.startedAt)} · 本轮用时 ${fmtLong(s.durationMs)}</p><div class="stats">`;
-    if (s.mode === 'hang') {
-      h += stat('总悬挂时长', fmt(r.totalMs), 'hl') + stat('悬挂段数', r.count) + stat('中断次数', r.interruptions) +
+    if (isTimer(s.mode)) {
+      const w = HOLD_WORD[s.mode];
+      h += stat(`总${w}时长`, fmt(r.totalMs), 'hl') + stat(`${w}段数`, r.count) + stat('中断次数', r.interruptions) +
         stat('平均单次', fmt(r.avgMs)) + stat('最长单次', fmt(r.maxMs)) + kcalStat(s) + '</div>';
       h += reportHTML(s);
-      h += rows('每段悬挂（按时间顺序）', r.segments.map((x, i) => [`第 ${i + 1} 段 · +${fmt(x.offsetMs).replace(/\.\d$/, '')}`, fmt(x.ms)]));
-      h += traceHTML(r.trace);
+      h += rows(`每段${w}（按时间顺序）`, r.segments.map((x, i) => [`第 ${i + 1} 段 · +${fmt(x.offsetMs).replace(/\.\d$/, '')}`, fmt(x.ms)]));
+      h += traceHTML(r.trace, s.mode);
     } else {
       const best = r.groups.length ? Math.max(...r.groups) : 0;
       h += stat('总次数', r.total, 'hl') + stat('组数', r.groups.length) + stat('最多一组', best) + kcalStat(s) + '</div>';
@@ -368,7 +384,7 @@
 
   function showResult(s, o = {}) {
     $('#rTitle').textContent = MODE_NAME[s.mode] + (o.fresh ? ' · 本轮结果' : '');
-    $('#rBody').innerHTML = o.empty ? '<p class="empty">本轮没有记录到有效数据，未保存。</p>' + (s.mode === 'hang' ? traceHTML(s.result.trace) : '') : detailHTML(s);
+    $('#rBody').innerHTML = o.empty ? '<p class="empty">本轮没有记录到有效数据，未保存。</p>' + (isTimer(s.mode) ? traceHTML(s.result.trace, s.mode) : '') : detailHTML(s);
     const a = $('#rActions'); a.innerHTML = '';
     if (o.fresh) {
       const hb = healthBtn(s);
@@ -396,7 +412,7 @@
     el.innerHTML = list.length ? '' : '<p class="empty">还没有训练记录</p>';
     list.forEach(s => {
       const r = s.result;
-      const sum = s.mode === 'hang' ? `${fmt(r.totalMs)} · ${r.count} 段` : `${r.total} 次 · ${r.groups.length} 组`;
+      const sum = isTimer(s.mode) ? `${fmt(r.totalMs)} · ${r.count} 段` : `${r.total} 次 · ${r.groups.length} 组`;
       const b = document.createElement('button'); b.className = 'card item';
       b.innerHTML = `<span class="ico">${ICON[s.mode]}</span><span><b>${sum}</b><small>${MODE_NAME[s.mode]} · ${fmtDate(s.startedAt)}</small></span>`;
       b.onclick = () => showResult(s);
@@ -409,13 +425,15 @@
   const rep = { metric: 'hang', range: 7, list: [] };
   async function openReport() {
     rep.list = await DB.all();
-    const L = rep.list, H = L.filter(s => s.mode === 'hang'), P = L.filter(s => s.mode === 'pullup');
+    const L = rep.list, H = L.filter(s => s.mode === 'hang'), WS = L.filter(s => s.mode === 'wallsit'), P = L.filter(s => s.mode === 'pullup');
     const max = a => a.length ? Math.max(...a) : 0;
     $('#repStats').innerHTML =
       stat('总训练次数', L.length) +
-      stat('累计悬垂时长', fmtLong(H.reduce((x, s) => x + s.result.totalMs, 0))) +
       stat('累计引体次数', P.reduce((x, s) => x + s.result.total, 0)) +
+      stat('累计悬垂时长', fmtLong(H.reduce((x, s) => x + s.result.totalMs, 0))) +
       stat('最长单次悬垂', fmt(max(H.map(s => s.result.maxMs)))) +
+      stat('累计静蹲时长', fmtLong(WS.reduce((x, s) => x + s.result.totalMs, 0))) +
+      stat('最长单次静蹲', fmt(max(WS.map(s => s.result.maxMs)))) +
       stat('单轮最多引体', max(P.map(s => s.result.total))) +
       stat('单组最多引体', max(P.flatMap(s => s.result.groups)));
     drawChart(); show('report');
@@ -426,9 +444,9 @@
     const vals = days.map(() => 0);
     rep.list.filter(s => s.mode === rep.metric).forEach(s => {
       const i = Math.floor((new Date(s.startedAt).setHours(0, 0, 0, 0) - days[0]) / 864e5);
-      if (i >= 0 && i < n) vals[i] += rep.metric === 'hang' ? s.result.totalMs / 1000 : s.result.total;
+      if (i >= 0 && i < n) vals[i] += isTimer(rep.metric) ? s.result.totalMs / 1000 : s.result.total;
     });
-    const isHang = rep.metric === 'hang', peak = Math.max(...vals, 0);
+    const isHang = isTimer(rep.metric), peak = Math.max(...vals, 0);
     const div = isHang && peak >= 120 ? 60 : 1, unit = isHang ? (div === 60 ? '分钟' : '秒') : '次';
     const v = vals.map(x => x / div), top = Math.max(...v, isHang ? 1 : 3);
     const nice = Math.ceil(top * 1.15), W = 360, Hh = 200, L = 34, B = 24, Tp = 20, pw = W - L - 6, ph = Hh - B - Tp, bw = pw / n;

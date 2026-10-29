@@ -18,11 +18,14 @@
 
 <!-- 首页 -->
 <section class="view page" id="v-home">
-  <header class="brand"><h1><img src="icons/icon-192.png" alt="">Hold Rep</h1><p>单杠自动计时 · 计数</p>
+  <header class="brand"><h1><img src="icons/icon-192.png" alt="">Hold Rep</h1><p>自动计时 · 计数</p>
     <button class="gear" id="goSettings" aria-label="设置"><i data-ico="settings"></i></button></header>
   <div class="stack">
   <button class="card mode" data-mode="hang">
     <span class="ico" data-ico="hang"></span><span><b>Dead Hang 计时</b><small>抓杠悬垂，自动开始 / 暂停 / 接续</small></span>
+  </button>
+  <button class="card mode" data-mode="wallsit">
+    <span class="ico" data-ico="wallsit"></span><span><b>Wall Sit 计时</b><small>靠墙静蹲，蹲到大腿接近水平自动计时，站起暂停</small></span>
   </button>
   <button class="card mode" data-mode="pullup">
     <span class="ico" data-ico="pullup"></span><span><b>Pull-up 计数</b><small>引体向上，正握 / 反握均可，拉起到顶 + 回到伸直算 1 次</small></span>
@@ -32,7 +35,7 @@
     <button class="card small" id="goReport"><i data-ico="chart"></i>数据报表</button>
   </div>
   </div>
-  <p class="hint">手机竖屏放在单杠前方的地面或低处，稍微仰拍，让画面拍到单杠和全身。Dead Hang 必须拍到双脚，用来判断是否离地。</p>
+  <p class="hint">手机竖屏放在单杠前方的地面或低处，稍微仰拍，让画面拍到单杠和全身。Dead Hang 必须拍到双脚，用来判断是否离地。Wall Sit 把手机放在正前方地面，拍到全身。</p>
   <p class="hint ver" id="ver"></p>
 </section>
 
@@ -99,7 +102,7 @@
   <header class="bar"><button class="back" data-home>‹ 首页</button><h2>数据报表</h2></header>
   <div id="repStats" class="stats"></div>
   <div class="seg" id="segMetric">
-    <button data-v="hang" class="on">悬垂时长</button><button data-v="pullup">引体次数</button>
+    <button data-v="hang" class="on">悬垂时长</button><button data-v="wallsit">静蹲时长</button><button data-v="pullup">引体次数</button>
   </div>
   <div class="seg" id="segRange">
     <button data-v="7" class="on">近 7 天</button><button data-v="30">近 30 天</button>
