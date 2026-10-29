@@ -6,6 +6,15 @@
   const $$ = s => [...document.querySelectorAll(s)];
   const MODE_NAME = { hang: 'Dead Hang 悬垂', pullup: '引体向上' };
   const cam = $('#cam'), overlay = $('#overlay');
+  // 线条图标（与 App 图标同一风格：圆头粗线），颜色随 currentColor
+  const svg = b => `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">${b}</svg>`;
+  const ICON = {
+    pullup: svg('<path d="M14 54H86"/><circle cx="50" cy="32" r="11" fill="currentColor" stroke="none"/><path d="M28 54A22 22 0 0 0 72 54"/>'),
+    hang: svg('<circle cx="50" cy="57" r="29"/><path d="M42 16H58M50 16V28M50 57V40"/>'),
+    list: svg('<path d="M34 28H82M34 50H82M34 72H82"/><circle cx="17" cy="28" r="2"/><circle cx="17" cy="50" r="2"/><circle cx="17" cy="72" r="2"/>'),
+    chart: svg('<path d="M20 80V58M40 80V40M60 80V50M80 80V24"/>'),
+  };
+  $$('[data-ico]').forEach(e => { e.outerHTML = e.tagName === 'I' ? ICON[e.dataset.ico] : `<span class="ico">${ICON[e.dataset.ico]}</span>`; });
 
   /* ---------- 工具 ---------- */
   const show = n => $$('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + n));
@@ -204,16 +213,16 @@
     const kps = T.pose.keypoints, ok = i => kps[i] && kps[i].score >= C.MIN_KP_SCORE;
     const good = T.phase === 'running' && (T.det.active || T.det.status === 'ready' || T.det.status === 'pulling');
     g.lineWidth = 4; g.lineCap = 'round';
-    g.strokeStyle = good ? 'rgba(46,230,107,.85)' : 'rgba(255,255,255,.55)';
+    g.strokeStyle = good ? 'rgba(255,94,26,.9)' : 'rgba(255,255,255,.55)';
     [[5, 6], [5, 7], [7, 9], [6, 8], [8, 10], [5, 11], [6, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16]].forEach(([a, b]) => {
       if (!ok(a) || !ok(b)) return;
       const A = P(kps[a]), B = P(kps[b]); g.beginPath(); g.moveTo(A.x, A.y); g.lineTo(B.x, B.y); g.stroke();
     });
-    g.fillStyle = '#ff6a1a';
+    g.fillStyle = '#fff';
     [0, 9, 10, 15, 16].forEach(i => { if (!ok(i)) return; const A = P(kps[i]); g.beginPath(); g.arc(A.x, A.y, 6, 0, 7); g.fill(); });
     if (T.mode === 'pullup' && T.det.barY != null) { // 估计的单杠高度
       const y = oy + T.det.barY * s;
-      g.setLineDash([10, 8]); g.strokeStyle = 'rgba(255,106,26,.9)'; g.lineWidth = 2;
+      g.setLineDash([10, 8]); g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 2;
       g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); g.setLineDash([]);
     }
   }
@@ -388,7 +397,7 @@
       const r = s.result;
       const sum = s.mode === 'hang' ? `${fmt(r.totalMs)} · ${r.count} 段` : `${r.total} 次 · ${r.groups.length} 组`;
       const b = document.createElement('button'); b.className = 'card item';
-      b.innerHTML = `<span class="ico">${s.mode === 'hang' ? '⏱' : '⬆︎'}</span><span><b>${sum}</b><small>${MODE_NAME[s.mode]} · ${fmtDate(s.startedAt)}</small></span>`;
+      b.innerHTML = `<span class="ico">${ICON[s.mode]}</span><span><b>${sum}</b><small>${MODE_NAME[s.mode]} · ${fmtDate(s.startedAt)}</small></span>`;
       b.onclick = () => showResult(s);
       el.appendChild(b);
     });
@@ -429,7 +438,7 @@
     });
     v.forEach((x, i) => {
       const h = ph * x / nice, bx = L + i * bw + bw * .15, w = bw * .7;
-      if (x > 0) svg += `<rect x="${bx}" y="${Tp + ph - h}" width="${w}" height="${h}" rx="${Math.min(4, w / 2)}" fill="#ff6a1a"/>`;
+      if (x > 0) svg += `<rect x="${bx}" y="${Tp + ph - h}" width="${w}" height="${h}" rx="${Math.min(4, w / 2)}" fill="#ff5e1a"/>`;
       if (x > 0 && n === 7) svg += `<text x="${bx + w / 2}" y="${Tp + ph - h - 5}" text-anchor="middle" fill="#fff" font-size="11">${+x.toFixed(1)}</text>`;
       const d = days[i], lab = n === 7 ? '日一二三四五六'[d.getDay()] : ((n - 1 - i) % 5 === 0 ? `${d.getMonth() + 1}/${d.getDate()}` : '');
       if (lab) svg += `<text x="${bx + w / 2}" y="${Hh - 6}" text-anchor="middle" fill="#9aa4b2" font-size="11">${lab}</text>`;

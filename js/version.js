@@ -1,2 +1,2 @@
 /* 版本信息（单一来源）：页面首页与 sw.js 缓存名都读这里。用 ./bump.sh 自动递增。 */
-globalThis.HR_BUILD = { version: 'v30', time: '2026-10-29 09:58' };
+globalThis.HR_BUILD = { version: 'v31', time: '2026-10-29 10:47' };
