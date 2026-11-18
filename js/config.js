@@ -14,7 +14,9 @@ window.HR_CONFIG = {
   HANG_ANGLE_HOLD: 140,         // 已在悬垂中：肘角 ≥ 此值即保持（迟滞，防抖）
   HANG_WRIST_ABOVE: 0.8,        // 手腕需高于肩膀多少个 unit（排除手放下）
   HANG_REQUIRE_BOTH_ARMS: false,// true=必须两只手臂都被识别到
-  HANG_MAX_SWING_SPEED: 1.5,    // 肩部移动速度上限（unit/秒），超过视为非静止（如跳上杠）
+  HANG_MAX_SWAY_AMP: 0.15,      // 肩部在 HANG_SWAY_WINDOW_MS 内的位置峰峰值上限（unit），超过视为摆荡 / 跳上杠
+  HANG_SWAY_WINDOW_MS: 400,     // 摆幅统计窗口（毫秒）：覆盖抖动的一个周期，又能较快反映真实摆动
+  HANG_SWAY_HOLD_RATIO: 1.4,    // 已在计时中时摆幅阈值放宽倍数（迟滞，防抖）
   HANG_REQUIRE_FEET_OFF_GROUND: true, // 必须脚离地才计时（需先站立校准地面，见 detectors.js）
   HANG_FEET_HOLD_RATIO: 0.8,    // 已在悬垂中时，离地门槛 = HANG_FEET_LIFT × 此值（防抖）
   HANG_FEET_LIFT: 0.28,         // 脚踝比站立校准位置高出多少 unit 才算离地。

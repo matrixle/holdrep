@@ -105,7 +105,8 @@ Wall Sit：下蹲深度（大腿是否到水平）、后段逐渐站高、身体
 
 ## 调参
 改 `js/config.js` 后，运行 `./bump.sh` 刷新缓存版本。常见问题：
-- 悬垂不计时 → 降低 `HANG_ANGLE_ENTER`、`HANG_WRIST_ABOVE`，或调大 `HANG_MAX_SWING_SPEED`
+- 悬垂不计时 → 降低 `HANG_ANGLE_ENTER`、`HANG_WRIST_ABOVE`，或调大 `HANG_MAX_SWAY_AMP`（肩部摆幅上限）
+- 轻微抖动也会短暂暂停计时 → 调大 `HANG_MAX_SWAY_AMP` / `HANG_SWAY_HOLD_RATIO`；真实摆荡仍被计时则调小
 - 静蹲到位却不计时 → 看训练页「腿 / 膝」数值，按 `config.js` 里的实测表放宽 `WS_THIGH_SHIN` / `WS_DROP_MAX` / `WS_DROP_MIN`；太高或太低也计时 → 收紧
 - 引体漏计 → 增大 `PULLUP_CHIN_MARGIN` 或增大 `PULLUP_TOP_ELBOW_ANGLE`；回落不算 → 降低 `PULLUP_START_ANGLE`
 - 手机发热/卡顿 → 增大 `DETECT_INTERVAL_MS`，或 `SHOW_SKELETON:false`
