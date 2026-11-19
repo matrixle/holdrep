@@ -290,13 +290,10 @@
   function traceHTML(tr, mode) {
     if (!tr || !tr.length) return '';
     const f = v => v == null ? ' -- ' : (v < 0 ? '' : ' ') + v.toFixed(2), ws = mode === 'wallsit';
-    const hasAmp = !ws && tr.some(r => r[9] != null); // 旧记录没有摆幅列
     const lines = tr.map(r => ws
       ? `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 膝角${r[3] == null ? '--' : r[3]} 膝低${f(r[4])} 速${f(r[5])} 蹲${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`
-      : `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 肘${r[3] == null ? '--' : r[3]} 手${f(r[4])} 速${f(r[5])}${r[9] == null ? '' : ' 摆' + f(r[9])} 脚${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`);
-    const head = ws
-      ? '时间 左/右腿 大腿÷小腿 2D膝角 膝盖低于髋÷躯干 肩速 下蹲ok 姿势ok 计时'
-      : '时间 左/右脚离地(unit) 肘角 手腕高 肩速 ' + (hasAmp ? '摆幅 ' : '') + '脚ok 姿势ok 计时';
+      : `${String(r[0].toFixed(1)).padStart(5)}s 左${f(r[1])} 右${f(r[2])} 肘${r[3] == null ? '--' : r[3]} 手${f(r[4])} 速${f(r[5])} 脚${r[6] ? '✓' : '✗'} 姿${r[7] ? '✓' : '✗'} ${r[8] ? '▶计时' : '·'}`);
+    const head = ws ? '时间 左/右腿 大腿÷小腿 2D膝角 膝盖低于髋÷躯干 肩速 下蹲ok 姿势ok 计时' : '时间 左/右脚离地(unit) 肘角 手腕高 肩速 脚ok 姿势ok 计时';
     return `<details class="list"><summary style="padding:12px 14px;color:var(--mute);font-size:14px">调试数据（${tr.length} 行，用于调参）</summary>
       <pre class="trace">${head}\n${lines.join('\n')}</pre></details>`;
   }

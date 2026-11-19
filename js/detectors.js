@@ -116,9 +116,6 @@
       this.lastT = null;
       this.prevSho = null;
       this.speed = 0;
-      this.shoHist = [];      // 肩部位置历史（像素 + 时间），计算短窗口摆幅
-      this.shoF = null;       // 平滑后的肩部位置，抑制单帧关键点噪声
-      this.amp = null;        // 窗口内肩部位置峰峰值（unit），计时连续性用它判断
       this.present = false;
       // 地面校准：双手放下站立时记录脚踝/膝盖的 y，之后脚比它高 = 离地
       this.ground = { ankle: [null, null], knee: [null, null], unit: null };
@@ -209,15 +206,12 @@
       const a = analyze(pose);
       this.present = !!a;
       this._learn(a);
-      // 动作分析用：肩部中点的归一化速度（EMA 平滑）。计时连续性不再用它判断，
-      // 因为抖动会在单帧产生速度尖峰；改用下面 _sway() 的短窗口位置峰峰值。
+      // 身体是否静止：肩部中点的归一化速度（EMA 平滑）
       if (a && this.prevSho && dt > 0) {
         const sp = Math.hypot(a.shoMid.x - this.prevSho.x, a.shoMid.y - this.prevSho.y) / a.unit / (dt / 1000);
         this.speed = this.speed * 0.7 + sp * 0.3;
       } else if (!a) this.speed = 0;
       this.prevSho = a ? a.shoMid : null;
-      if (a) this._sway(a, t);
-      else { this.shoHist.length = 0; this.shoF = null; this.amp = null; }
 
       const valid = !!a && this._valid(a);
       const wasActive = this.active;
@@ -246,37 +240,19 @@
         this.trace.push(this._traceRow(a, t, valid));
       }
     }
-    // 摆幅：最近 HANG_SWAY_WINDOW_MS 内肩部位置的峰峰值（unit）。
-    // 抖动是高频小幅、真实摆动是低频大幅，峰峰值比瞬时速度更抗关键点噪声。
-    _sway(a, t) {
-      const c = cfg();
-      this.shoF = this.shoF
-        ? { x: this.shoF.x * 0.65 + a.shoMid.x * 0.35, y: this.shoF.y * 0.65 + a.shoMid.y * 0.35 }
-        : { x: a.shoMid.x, y: a.shoMid.y };
-      const h = this.shoHist;
-      h.push({ t, x: this.shoF.x, y: this.shoF.y });
-      while (h.length && t - h[0].t > c.HANG_SWAY_WINDOW_MS) h.shift();
-      let best = 0;
-      for (let i = 0; i < h.length; i++) for (let j = i + 1; j < h.length; j++) {
-        const d = Math.hypot(h[i].x - h[j].x, h[i].y - h[j].y);
-        if (d > best) best = d;
-      }
-      this.amp = best / a.unit;
-    }
-    // 悬垂成立：手臂姿势 + 双脚离地 + 摆幅不超过上限（离地高度用于调试显示）
+    // 悬垂成立：手臂姿势 + 双脚离地 + 身体基本静止（两项都要算，离地高度用于调试显示）
     _valid(a) {
-      const c = cfg(), hang = this._isHang(a), feet = this._feetOff(a);
+      const hang = this._isHang(a), feet = this._feetOff(a);
       this._ok = feet;
-      const amp = c.HANG_MAX_SWAY_AMP * (this.active ? c.HANG_SWAY_HOLD_RATIO : 1);
-      return hang && feet && this.amp != null && this.amp <= amp;
+      return hang && feet && this.speed <= cfg().HANG_MAX_SWING_SPEED;
     }
-    // 调试轨迹：t, 左脚离地, 右脚离地, 最小肘角, 最小手腕高度, 肩速, 脚离地ok, 姿势ok(valid), 计时中, 摆幅
+    // 调试轨迹：t, 左脚离地, 右脚离地, 最小肘角, 最小手腕高度, 肩速, 脚离地ok, 姿势ok(valid), 计时中
     _traceRow(a, t, valid) {
       const r2 = x => x == null ? null : Math.round(x * 100) / 100, ls = this.liftSides || [];
       return [t, r2(ls[0]), r2(ls[1]),
         a.arms.length ? Math.round(Math.min(...a.arms.map(m => m.angle))) : null,
         a.arms.length ? r2(Math.min(...a.arms.map(m => m.wristUp))) : null,
-        r2(this.speed), this._ok ? 1 : 0, valid ? 1 : 0, this.active ? 1 : 0, r2(this.amp)];
+        r2(this.speed), this._ok ? 1 : 0, valid ? 1 : 0, this.active ? 1 : 0];
     }
 
     finish(t0) {
