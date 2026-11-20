@@ -10,13 +10,15 @@ window.HR_CONFIG = {
   HEALTH_SHORTCUT: 'HoldRep 写入健康', // 写入苹果健康所用的快捷指令名称（需在「快捷指令」App 中按 README 建好）
 
   // ---- Dead Hang ----
-  HANG_ANGLE_ENTER: 155,        // 进入悬垂：肘角需 ≥ 此值（手臂伸直）
+  HANG_ANGLE_ENTER: 145,        // 进入悬垂：肘角需 ≥ 此值（仰拍 2D 肘角偏低；动作分析仍会判屈臂）
   HANG_ANGLE_HOLD: 140,         // 已在悬垂中：肘角 ≥ 此值即保持（迟滞，防抖）
   HANG_WRIST_ABOVE: 0.8,        // 手腕需高于肩膀多少个 unit（排除手放下）
   HANG_REQUIRE_BOTH_ARMS: false,// true=必须两只手臂都被识别到
-  HANG_MAX_SWING_SPEED: 1.5,    // 肩部移动速度上限（unit/秒），超过视为非静止（如跳上杠）
+  HANG_MAX_SWING_SPEED: 1.5,    // 入场时肩部移动速度上限（unit/秒），超过视为非静止（如跳上杠）
+  HANG_HOLD_MAX_SWING_SPEED: 2.5,// 已在计时中时的速度上限（放宽，避免抖动造成短暂暂停；1.5 = 恢复严格）
   HANG_REQUIRE_FEET_OFF_GROUND: true, // 必须脚离地才计时（需先站立校准地面，见 detectors.js）
   HANG_FEET_HOLD_RATIO: 0.8,    // 已在悬垂中时，离地门槛 = HANG_FEET_LIFT × 此值（防抖）
+  HANG_FEET_UNKNOWN_MS: 1200,   // 计时中双脚关键点暂时不可见时，沿用上一次「已离地」状态的最长时间
   HANG_FEET_LIFT: 0.28,         // 脚踝比站立校准位置高出多少 unit 才算离地。
                                 // 实测（BlazePose，低杠）：直腿悬垂脚刚离地 ≈0.35，屈膝悬垂 ≈0.9，
                                 // 握杠踮脚站立 ≈0.2，握杠平脚站立 ≈0。取 0.28 区分「踮脚」与「刚离地」。

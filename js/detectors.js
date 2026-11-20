@@ -121,6 +121,8 @@
       this.ground = { ankle: [null, null], knee: [null, null], unit: null };
       this.groundState = 'nocalib'; // nocalib | unknown | onground | lifted
       this.liftSides = null;
+      this.lastFeet = null;         // 上一次能判断时的离地状态（unknown 时短暂沿用）
+      this.feetUnknownSince = null; // 双脚关键点开始不可见的时间
       this.trace = []; this._lastTrace = -1e9; // 调试轨迹：约每 0.5s 一行 + 状态切换时
       this.lift = null;             // 当前「较低那只脚」的离地高度（unit），仅供调试显示
       this.st = null;               // 当前段的动作统计（动作分析报告用）
@@ -159,26 +161,41 @@
       if (any) g.unit = ema(g.unit, a.unit);
     }
     calibrate(pose) { this._learn(analyze(pose)); } // 未开始/暂停时也持续校准
-    // 双脚都必须离地：取两侧离地高度的较小者
-    _feetOff(a) {
+    // 双脚离地：每侧优先用脚踝，脚踝不可见时用膝盖；两侧都必须有可用关节。
+    // 计时中两侧都暂时不可见时，若上一次确认离地，先沿用一小段时间（HANG_FEET_UNKNOWN_MS），
+    // 避免关键点抖动 / 短暂遮挡造成假暂停；重新可见后立即按真实高度判断。
+    _feetOff(a, t) {
       const c = cfg(), g = this.ground;
       if (!c.HANG_REQUIRE_FEET_OFF_GROUND) return true;
       const thr = c.HANG_FEET_LIFT * (this.active ? c.HANG_FEET_HOLD_RATIO : 1); // 已悬垂时放宽，防抖
-      let d = null;
-      for (const key of ['ankle', 'knee']) {
-        if ([0, 1].every(i => g[key][i] != null && a[key][i] != null)) {
-          this.liftSides = [0, 1].map(i => (g[key][i] - a[key][i]) / g.unit);
-          d = Math.min(...this.liftSides); break;
+      const lifts = [null, null];
+      for (let i = 0; i < 2; i++) {
+        for (const key of ['ankle', 'knee']) {
+          if (g[key][i] != null && a[key][i] != null) { lifts[i] = (g[key][i] - a[key][i]) / g.unit; break; }
         }
       }
-      this.lift = d;
-      if (d == null) {
-        this.liftSides = null;
+      this.liftSides = lifts;
+      const known = lifts.filter(v => v != null);
+      this.lift = known.length ? Math.min(...known) : null;
+      if (!known.length) {
         this.groundState = g.ankle.every(v => v == null) && g.knee.every(v => v == null) ? 'nocalib' : 'unknown';
+        if (this.active && this.lastFeet === 'lifted') {
+          if (this.feetUnknownSince == null) this.feetUnknownSince = t;
+          if (t - this.feetUnknownSince <= c.HANG_FEET_UNKNOWN_MS) return true;
+        }
         return false;
       }
-      this.groundState = d >= thr ? 'lifted' : 'onground';
-      return d >= thr;
+      // 入场时要求两侧都能判断，避免只看到一只脚就开始计时；计时中允许单侧可见
+      if (!this.active && (lifts[0] == null || lifts[1] == null)) {
+        this.groundState = 'unknown';
+        this.lastFeet = null;
+        return false;
+      }
+      this.feetUnknownSince = null;
+      const ok = Math.min(...known) >= thr;
+      this.groundState = ok ? 'lifted' : 'onground';
+      this.lastFeet = ok ? 'lifted' : 'onground';
+      return ok;
     }
     get totalMs() { return this.segments.reduce((s, x) => s + x.ms, 0) + this.cur; }
     get status() { return this.active ? 'hanging' : (this.segments.length ? 'paused' : 'waiting'); }
@@ -189,6 +206,7 @@
       }
       this.st = null;
       this.active = false; this.cur = 0; this.validMs = 0; this.lostMs = 0; this.prevValid = false;
+      this.feetUnknownSince = null;
     }
     interrupt() { this._end(); this.lastT = null; this.prevSho = null; }
 
@@ -213,7 +231,7 @@
       } else if (!a) this.speed = 0;
       this.prevSho = a ? a.shoMid : null;
 
-      const valid = !!a && this._valid(a);
+      const valid = !!a && this._valid(a, t);
       const wasActive = this.active;
 
       if (!this.active) {
@@ -240,11 +258,12 @@
         this.trace.push(this._traceRow(a, t, valid));
       }
     }
-    // 悬垂成立：手臂姿势 + 双脚离地 + 身体基本静止（两项都要算，离地高度用于调试显示）
-    _valid(a) {
-      const hang = this._isHang(a), feet = this._feetOff(a);
+    // 悬垂成立：手臂姿势 + 双脚离地 + 身体基本静止（离地高度用于调试显示）
+    _valid(a, t) {
+      const c = cfg(), hang = this._isHang(a), feet = this._feetOff(a, t);
       this._ok = feet;
-      return hang && feet && this.speed <= cfg().HANG_MAX_SWING_SPEED;
+      const maxSpeed = this.active ? (c.HANG_HOLD_MAX_SWING_SPEED || c.HANG_MAX_SWING_SPEED) : c.HANG_MAX_SWING_SPEED;
+      return hang && feet && this.speed <= maxSpeed;
     }
     // 调试轨迹：t, 左脚离地, 右脚离地, 最小肘角, 最小手腕高度, 肩速, 脚离地ok, 姿势ok(valid), 计时中
     _traceRow(a, t, valid) {
