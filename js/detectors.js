@@ -295,8 +295,8 @@
   class WallSitDetector extends HangDetector {
     reset() { super.reset(); this.squat = null; this.drop = null; this.legState = 'none'; }
     _learn() {}                     // 不需要地面校准
-    // 每条拍到的腿都要在「静蹲高度」内，至少拍到一条；已在计时中时阈值放宽（迟滞）
     // 返回每条腿：'down' 到位 | 'high' 太高 / 站着 | 'deep' 蹲太低 | null 判断不了
+    // 至少一条可见腿在「静蹲高度」内就算到位；另一条偏高多半是左右不对称 / 遮挡，交给动作分析标出
     _leg(l, side) {
       const c = cfg(), k = this.active ? c.WS_HOLD_RATIO : 1;
       if (side) {
@@ -313,12 +313,14 @@
       const rs = a.legs.filter(l => l && l.ratio != null).map(l => l.ratio);
       this.squat = rs.length ? Math.min(...rs) : null;
       this.drop = a.legs.filter(l => l && l.drop != null).map(l => l.drop).reduce((m, v) => m == null ? v : Math.min(m, v), null);
-      this.legState = !st.length ? 'none' : st.every(s => s === 'down') ? 'down' : st.includes('deep') ? 'deep' : 'high';
+      this.legState = !st.length ? 'none' : st.includes('down') ? 'down' : st.includes('deep') ? 'deep' : 'high';
       return this.legState === 'down';
     }
     _valid(a) {
+      const c = cfg();
       this._ok = this._squat(a);
-      return this._ok && this.speed <= cfg().WS_MAX_SPEED;
+      const maxSpeed = this.active ? (c.WS_HOLD_MAX_SPEED || c.WS_MAX_SPEED) : c.WS_MAX_SPEED;
+      return this._ok && this.speed <= maxSpeed;
     }
     // 计时中逐帧累计（动作分析用）：深度、左右差、晃动、侧倾、3D 膝角 / 髋角
     _stat(a) {
