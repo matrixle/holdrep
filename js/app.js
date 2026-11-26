@@ -32,6 +32,10 @@
     const cs = Math.floor(Math.max(0, ms) / 10);
     return pad(Math.floor(cs / 6000)) + ':' + pad(Math.floor(cs / 100) % 60) + '.' + pad(cs % 100);
   };
+  const fmtDur = ms => { // 总时长 mm:ss（不显示毫秒）
+    const s = Math.floor(Math.max(0, ms) / 1000);
+    return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  };
   function fmtLong(ms) { // 累计时长：h m s
     const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
     return h ? `${h}h ${pad(m)}m` : m ? `${m}m ${pad(s % 60)}s` : `${s}s`;
@@ -199,6 +203,9 @@
       }
       const f = big ? fmtBig : fmt;
       $('#hCur').textContent = f(cur); $('#hTot').textContent = f(tot);
+      // 总时长 = 从第一次点「开始」到「结束」的墙钟时间（包含休息 / 暂停）
+      const dur = T.t0 && (T.phase === 'running' || T.phase === 'paused') ? performance.now() - T.t0 : 0;
+      $('#hDur').textContent = fmtDur(dur);
     } else {
       $('#pCount').textContent = d.count;
       $('#pLabel').textContent = d.count ? `次数 · 第 ${d.currentGroup} 组` : '次数';
