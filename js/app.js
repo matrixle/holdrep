@@ -36,6 +36,31 @@
     const s = Math.floor(Math.max(0, ms) / 1000);
     return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
   };
+  /* ---- 七段数码管（LED 记分板）：每个字符是一个小 SVG，亮段橙色、暗段留残影 ---- */
+  const S7_LINES = {
+    a: '1.2,.7 4.8,.7', b: '5.2,1.1 4.5,4.4', c: '4.5,5.6 5.2,8.9', d: '4.8,9.3 1.2,9.3',
+    e: '.8,8.9 1.5,5.6', f: '1.5,4.4 .8,1.1', g: '1.3,5 4.7,5',
+  };
+  const S7_ON = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcfgd' };
+  const S7_LINE = k => {
+    const [p, q] = S7_LINES[k].split(' '), [x1, y1] = p.split(','), [x2, y2] = q.split(',');
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  };
+  const s7Digit = ch => {
+    const on = (S7_ON[ch] || '').split(''), off = 'abcdefg'.split('').filter(s => !on.includes(s));
+    return `<svg class="s7${on.length ? ' on' : ''}" viewBox="0 0 6 10">` +
+      (off.length ? `<g class="off">${off.map(S7_LINE).join('')}</g>` : '') +
+      (on.length ? `<g class="on">${on.map(S7_LINE).join('')}</g>` : '') + `</svg>`;
+  };
+  const s7Colon = () => `<svg class="s7 colon on" viewBox="0 0 6 10"><g class="on"><circle cx="3" cy="2.6" r=".55"/><circle cx="3" cy="7.4" r=".55"/></g></svg>`;
+  const s7Dot = () => `<svg class="s7 dp on" viewBox="0 0 2 10"><g class="on"><circle cx="1" cy="9.3" r=".55"/></g></svg>`;
+  const seg7 = str => [...str].map(c => c === ':' ? s7Colon() : c === '.' ? s7Dot() : s7Digit(c)).join('');
+  function setS7(id, str) { // 内容没变就不重建 DOM
+    const el = document.getElementById(id);
+    if (el.dataset.v === str) return;
+    el.dataset.v = str;
+    el.innerHTML = seg7(str);
+  }
   function fmtLong(ms) { // 累计时长：h m s
     const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
     return h ? `${h}h ${pad(m)}m` : m ? `${m}m ${pad(s % 60)}s` : `${s}s`;
@@ -202,10 +227,14 @@
         const extra = Math.min(performance.now() - d.lastT, 300); cur += extra; tot += extra;
       }
       const f = big ? fmtBig : fmt;
-      $('#hCur').textContent = f(cur); $('#hTot').textContent = f(tot);
+      setS7('hCur', f(cur)); setS7('hTot', f(tot));
       // 总时长 = 从第一次点「开始」到「结束」的墙钟时间（包含休息 / 暂停）
       const dur = T.t0 && (T.phase === 'running' || T.phase === 'paused') ? performance.now() - T.t0 : 0;
-      $('#hDur').textContent = fmtDur(dur);
+      setS7('hDur', fmtDur(dur));
+      // 当前段进度条：相对本次最佳段；计时中小圆点呼吸
+      const best = Math.max(1, ...(d.segments || []).map(s => s.ms), cur);
+      $('#segBar').style.width = Math.min(100, cur / best * 100) + '%';
+      $('#tCur').classList.toggle('live-on', T.phase === 'running' && d.active);
     } else {
       $('#pCount').textContent = d.count;
       $('#pLabel').textContent = d.count ? `次数 · 第 ${d.currentGroup} 组` : '次数';
